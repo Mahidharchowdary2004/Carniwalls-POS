@@ -1,0 +1,621 @@
+import React, { useEffect, useState } from 'react'
+import { useStore } from '../store'
+import toast from 'react-hot-toast'
+
+const ORDER_TYPES = [
+  { key: 'dine-in', label: 'DINE IN', icon: '🍽️', cls: 'dine' },
+  { key: 'delivery', label: 'DELIVERY', icon: '🛵', cls: 'delivery' },
+  { key: 'takeaway', label: 'TAKE AWAY', icon: '🛍️', cls: 'takeaway' },
+]
+
+export default function POS() {
+  const { tables, menuItems, categories, activeOrders,
+    fetchTables, fetchMenu, fetchOrders,
+    createOrder, updateOrder, generateBill, posState, setPosState } = useStore()
+
+  const { orderType, selectedTable, activeOrderId, cart, customerName, discount, discountType } = posState
+
+  const [activeCat, setActiveCat] = useState('all')
+  const [search, setSearch] = useState('')
+  const [section, setSection] = useState('all')
+  const [step, setStep] = useState('tables') // 'tables' | 'items'
+  const [payMethod, setPayMethod] = useState('cash')
+  const [showPay, setShowPay] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [splitPay, setSplitPay] = useState(false)
+  const [splitAmts, setSplitAmts] = useState({ cash: 0, card: 0, upi: 0 })
+
+  const { subtotal, discountAmt, total, isInvalidDiscount } = React.useMemo(() => {
+    const s = cart.reduce((sum, i) => sum + (Number(i.price || 0) * i.qty), 0)
+    const base = s
+    const dAmt = discountType === 'pct' ? Math.round(base * (discount / 100)) : discount
+    const invalid = dAmt > base
+    return { subtotal: s, discountAmt: dAmt, total: invalid ? base : base - dAmt, isInvalidDiscount: invalid }
+  }, [cart, discount, discountType])
+
+  useEffect(() => { fetchTables(); fetchMenu(); fetchOrders() }, [])
+
+  // When switching to takeaway/delivery, skip table selection
+  useEffect(() => {
+    if (orderType !== 'dine-in') { setPosState({ selectedTable: null }); setStep('items') }
+    else { setStep('tables') }
+  }, [orderType])
+
+  // Reset split state when opening modal
+  useEffect(() => {
+    if (showPay) {
+      setSplitPay(false)
+      setSplitAmts({ cash: total, card: 0, upi: 0 })
+    }
+  }, [showPay])
+
+  // Sync splitAmts with total changes (e.g. when discount changes)
+  useEffect(() => {
+    if (splitPay) {
+      const other = (splitAmts.card || 0) + (splitAmts.upi || 0)
+      setSplitAmts(prev => ({ ...prev, cash: Math.max(0, total - other) }))
+    }
+  }, [total])
+
+  // Auto-save cart to database
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (cart.length > 0 && selectedTable) {
+        syncOrder();
+      }
+    }, 1000); // Debounce save
+    return () => clearTimeout(timer);
+  }, [cart, customerName]);
+
+  async function syncOrder() {
+    try {
+      const payload = {
+        table_id: selectedTable?.id,
+        items: cart.map(i => ({ id: i.id, menu_item_id: i.id, name: i.name, price: i.price, qty: i.qty })),
+        order_type: orderType,
+        customer_name: customerName || undefined
+      }
+      if (activeOrderId) {
+        await updateOrder(activeOrderId, payload)
+      } else {
+        const ord = await createOrder(payload)
+        setPosState({ activeOrderId: ord.id })
+      }
+      fetchOrders()
+      fetchTables()
+    } catch (e) { console.error('Auto-save failed', e) }
+  }
+
+  const sections = ['all', ...new Set(tables.map(t => t.section))]
+  const visibleTables = (section === 'all' ? tables : tables.filter(t => t.section === section))
+    .sort((a, b) => (parseInt(a.number) || 0) - (parseInt(b.number) || 0))
+
+  const filteredMenu = menuItems.filter(i => {
+    const itemCat = i.category_id || i.category;
+    const catOk = activeCat === 'all' || String(itemCat) === String(activeCat)
+    const srchOk = !search || i.name.toLowerCase().includes(search.toLowerCase())
+    return catOk && srchOk && i.active !== false
+  })
+
+
+  /* ── TABLE SELECT ── */
+  function selectTable(table) {
+    const existing = activeOrders.find(o => String(o.table_id) === String(table.id))
+    if (existing) {
+      let items = existing.items
+      if (typeof items === 'string') {
+        try { items = JSON.parse(items) } catch (e) { items = [] }
+      }
+      setPosState({ selectedTable: table, activeOrderId: existing.id, cart: items || [], discount: 0 })
+    } else {
+      setPosState({ selectedTable: table, activeOrderId: null, cart: [], discount: 0 })
+    }
+    setStep('items')
+  }
+
+  /* ── CART ── */
+  function addItem(item) {
+    const ex = cart.find(i => i.id === item.id)
+    const newCart = ex ? cart.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i)
+      : [...cart, { ...item, qty: 1 }]
+    setPosState({ cart: newCart })
+    toast.success(`${item.name} added`, { icon: '🛒', duration: 800, position: 'bottom-center' })
+  }
+  function changeQty(id, delta) {
+    const newCart = cart.map(i => i.id === id ? { ...i, qty: i.qty + delta } : i).filter(i => i.qty > 0)
+    setPosState({ cart: newCart })
+  }
+  function removeItem(id) {
+    setPosState({ cart: cart.filter(i => i.id !== id) })
+  }
+
+  /* ── KOT ── */
+  async function printKOT() {
+    if (!cart.length) return toast.error('Add items first')
+    setSaving(true)
+    try {
+      await syncOrder() // Ensure latest state is saved
+      const oId = activeOrderId || useStore.getState().posState.activeOrderId;
+      if (oId) {
+        await updateOrder(oId, { kot_printed: true });
+        await fetchOrders();
+      }
+      toast.success('KOT Sent to Kitchen', { icon: '👨‍🍳' })
+      window.print();
+    } catch (e) { toast.error('KOT Failed') }
+    finally { setSaving(false) }
+  }
+
+  /* ── BILL ── */
+  async function confirmBill() {
+    if (!cart.length) return toast.error('Add items first')
+    setSaving(true)
+    try {
+      let orderId = activeOrderId
+      if (!orderId) {
+        const payload = {
+          table_id: selectedTable?.id,
+          items: cart.map(i => ({ id: i.id, menu_item_id: i.id, name: i.name, price: i.price, qty: i.qty })),
+          order_type: orderType,
+          customer_name: customerName || undefined
+        }
+        const ord = await createOrder(payload)
+        orderId = ord.id
+      }
+
+      const payData = splitPay ? splitAmts : { [payMethod]: total }
+      const bill = await generateBill(orderId, payData, discountAmt)
+      setShowPay(false);
+      setPosState({ cart: [], activeOrderId: null, selectedTable: null, discount: 0, discountType: 'amt', customerName: '' })
+      setStep(orderType === 'dine-in' ? 'tables' : 'items')
+      await fetchTables()
+      toast.success(`✅ Bill ₹${bill.total} — ${payMethod.toUpperCase()}`)
+    } catch (err) { toast.error('Billing failed') }
+    finally { setSaving(false) }
+  }
+
+  /* ── TABLE STATUS COLOR ── */
+  const tbColor = { free: '#e2e6ec', occupied: '#c0392b', reserved: '#2980b9' }
+
+  const getCat = (id) => categories.find(c => String(c.id) === String(id))
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 52px)', overflow: 'hidden', background: '#f4f6f9' }}>
+
+      {/* ── ORDER TYPE BAR (Petpooja style) ── */}
+      <div className="pos-topbar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px', borderRight: '1px solid var(--border)', height: '100%' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mode</span>
+        </div>
+        {ORDER_TYPES.map(t => (
+          <button
+            key={t.key}
+            className={`pos-type-btn ${orderType === t.key ? `active-${t.cls}` : ''}`}
+            style={{ opacity: orderType === t.key ? 1 : 0.38 }}
+            onClick={() => setPosState({ orderType: t.key })}
+          >
+            {t.icon} {t.label}
+          </button>
+        ))}
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+        {selectedTable && (
+          <div style={{ padding: '0 14px', borderLeft: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ background: '#c0392b', color: '#fff', padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+              Table {selectedTable.number}
+            </span>
+            <button className="btn btn-sm" style={{ fontSize: 11 }} onClick={() => { setStep('tables'); setPosState({ selectedTable: null, cart: [] }); }}>Change</button>
+          </div>
+        )}
+      </div>
+
+      {/* ── MAIN CONTENT ── */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+
+        {/* ═══════════ LEFT PANEL ═══════════ */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+          {/* STEP 1: TABLE SELECTION */}
+          {step === 'tables' && orderType === 'dine-in' && (
+            <div style={{ flex: 1, overflow: 'auto', background: '#f4f6f9' }}>
+              {/* Section tabs */}
+              <div style={{ display: 'flex', gap: 6, padding: '10px 14px', background: '#fff', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                {sections.map(s => (
+                  <button key={s} className={`section-tab ${section === s ? 'active' : ''}`} onClick={() => setSection(s)}>
+                    {s === 'all' ? 'All Sections' : s}
+                  </button>
+                ))}
+                <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, background: '#fff', border: '2px solid #e2e6ec', borderRadius: 2, display: 'inline-block' }} /> Free</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, background: '#fff5f5', border: '2px solid #c0392b', borderRadius: 2, display: 'inline-block' }} /> Occupied</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, background: '#eff6ff', border: '2px solid #2980b9', borderRadius: 2, display: 'inline-block' }} /> Reserved</span>
+                </div>
+              </div>
+
+              {/* Table grid */}
+              <div style={{ padding: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px,1fr))', gap: 10 }}>
+                  {visibleTables.map(table => {
+                    const hasOrder = activeOrders.find(o => String(o.table_id) === String(table.id))
+                    return (
+                      <div
+                        key={table.id}
+                        className={`table-cell ${table.status} ${selectedTable?.id === table.id ? 'selected' : ''}`}
+                        onClick={() => selectTable(table)}
+                        style={{ padding: '12px 10px', minHeight: 110, height: 'auto', position: 'relative' }}
+                      >
+                        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: 48, fontWeight: 900, color: 'var(--text)', opacity: 0.2, lineHeight: 1 }}>{String(table.number).replace(/^T-?/i, '')}</div>
+                        {hasOrder && (
+                          <div style={{ marginTop: 'auto', paddingTop: 8, width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ fontSize: 14, fontWeight: 900, color: '#c0392b' }}>
+                              ₹{(() => {
+                                let items = hasOrder.items;
+                                if (typeof items === 'string') {
+                                  try { items = JSON.parse(items) } catch (e) { items = [] }
+                                }
+                                return Array.isArray(items) ? items.reduce((s, i) => s + i.price * i.qty, 0).toFixed(0) : 0;
+                              })()}
+                            </div>
+                            <div
+                              onClick={(e) => { e.stopPropagation(); selectTable(table); setTimeout(() => setShowPay(true), 50); }}
+                              style={{ background: 'var(--primary-bg)', color: 'var(--primary)', padding: '5px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              title="Print Bill"
+                            >
+                              🖨️
+                            </div>
+                          </div>
+                        )}
+                        {hasOrder && <div style={{ width: 10, height: 10, background: '#c0392b', borderRadius: '50%', position: 'absolute', top: 6, right: 6, border: '2px solid #fff' }} />}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: MENU ITEMS */}
+          {step === 'items' && (
+            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              {/* Category Sidebar */}
+              <div style={{ width: 120, background: '#fff', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflowY: 'auto', flexShrink: 0 }}>
+                <button
+                  onClick={() => setActiveCat('all')}
+                  style={{
+                    padding: '12px 8px', border: 'none', cursor: 'pointer',
+                    fontSize: 13, fontWeight: 700, fontFamily: 'inherit', textAlign: 'center',
+                    background: activeCat === 'all' ? '#fff5f5' : 'transparent',
+                    color: activeCat === 'all' ? '#c0392b' : '#5a6478',
+                    borderLeft: activeCat === 'all' ? '4px solid #c0392b' : '4px solid transparent',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  <div style={{ fontSize: 24, marginBottom: 4 }}>🍽️</div>
+                  ALL
+                </button>
+                {categories.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => setActiveCat(c.id)}
+                    style={{
+                      padding: '12px 8px', border: 'none', cursor: 'pointer',
+                      fontSize: 12, fontWeight: 700, fontFamily: 'inherit', textAlign: 'center',
+                      background: activeCat === c.id ? '#fff5f5' : 'transparent',
+                      color: activeCat === c.id ? '#c0392b' : '#5a6478',
+                      borderLeft: activeCat === c.id ? '4px solid #c0392b' : '4px solid transparent',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <div style={{ fontSize: 24, marginBottom: 4 }}>{c.icon}</div>
+                    {c.name.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+
+              {/* Menu grid — Petpooja style white boxes */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: 12, background: '#f4f6f9' }}>
+                {filteredMenu.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 60, color: 'var(--text3)' }}>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
+                    <div>No items found</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px,1fr))', gap: 8 }}>
+                    {filteredMenu.map(item => {
+                      const inCart = cart.find(c => c.id === item.id)
+                      return (
+                        <div
+                          key={item.id}
+                          className={`menu-item-card ${inCart ? 'in-cart' : ''}`}
+                          onClick={() => addItem(item)}
+                        >
+                          {inCart && (
+                            <div style={{ position: 'absolute', top: 6, right: 6, background: '#c0392b', color: '#fff', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800 }}>
+                              {inCart.qty}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 24, marginBottom: 6, display: 'block' }}>{item.emoji}</div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span>{getCat(item.category_id)?.icon}</span>
+                            <span>{getCat(item.category_id)?.name || ''}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, marginBottom: 4 }}>
+                            <span className={item.type === 'veg' ? 'veg-dot' : 'nonveg-dot'} style={{ marginTop: 2, flexShrink: 0 }} />
+                            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3 }}>{item.name}</div>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: '#c0392b' }}>₹{item.price}</div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: (item.stock || 0) <= 0 ? '#c0392b' : '#27ae60' }}>Qty: {parseInt(item.stock || 0)}</div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ═══════════ RIGHT PANEL — ORDER CART (Petpooja style) ═══════════ */}
+        {step === 'items' && (
+          <div style={{ width: 420, background: '#fff', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+            {/* Search Bar in Cart */}
+            <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', background: '#f8f9fb' }}>
+              <input className="form-input" placeholder="🔍 Search menu item..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: '100%', height: 40, padding: '0 14px', fontSize: 14, borderRadius: 20 }} />
+            </div>
+
+            {/* Column headers — like Petpooja */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 70px 80px', gap: 4, padding: '7px 10px', background: '#f0f2f5', borderBottom: '1px solid var(--border)', fontSize: 13, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <div>ITEMS</div>
+              <div style={{ textAlign: 'center' }}>CHECK ITEMS</div>
+              <div style={{ textAlign: 'center' }}>QTY.</div>
+              <div style={{ textAlign: 'right' }}>PRICE</div>
+            </div>
+
+            {/* Cart items */}
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {cart.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--text3)' }}>
+                  <div style={{ fontSize: 36, marginBottom: 8, opacity: 0.4 }}>🛒</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>
+                    {step === 'tables' ? 'Select a table first' : 'Tap items to add to order'}
+                  </div>
+                </div>
+              ) : cart.map(item => (
+                <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 70px 80px', gap: 4, padding: '8px 10px', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text)' }}>{item.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text3)', textTransform: 'uppercase', fontWeight: 600 }}>
+                      {getCat(item.category_id)?.name || ''}
+                    </div>
+                    <div style={{ fontSize: 14, color: 'var(--text3)' }}>₹{item.price}</div>
+                  </div>
+                  {/* Remove X button (Petpooja style) */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <button onClick={() => removeItem(item.id)} style={{ width: 18, height: 18, borderRadius: '50%', background: '#e74c3c', border: 'none', color: '#fff', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontFamily: 'inherit', lineHeight: 1 }}>✕</button>
+                  </div>
+                  {/* Qty controls */}
+                  <div className="qty-ctrl" style={{ justifyContent: 'center' }}>
+                    <button className="qty-btn" onClick={() => changeQty(item.id, -1)}>−</button>
+                    <span className="qty-val">{item.qty}</span>
+                    <button className="qty-btn" onClick={() => changeQty(item.id, 1)}>+</button>
+                  </div>
+                  {/* Price */}
+                  <div style={{ textAlign: 'right', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
+                    {(Number(item.price || 0) * item.qty).toFixed(2)}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+
+            {/* Totals + Bill actions */}
+            <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', background: '#f8f9fb' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--text2)', marginBottom: 3 }}>
+                <span>Subtotal</span><span>₹{subtotal.toFixed(2)}</span>
+              </div>
+
+              {discountAmt > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#27ae60', marginBottom: 6 }}>
+                  <span>Discount {discountType === 'pct' ? `(${discount}%)` : ''}</span><span>−₹{discountAmt.toFixed(2)}</span>
+                </div>
+              )}
+
+              {/* Total — big like Petpooja */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: '1px solid var(--border)', marginBottom: 8 }}>
+                <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>Total</span>
+                <span style={{ fontSize: 26, fontWeight: 900, color: '#c0392b' }}>₹{total.toFixed(0)}</span>
+              </div>
+
+
+
+              {/* Action buttons — KOT & Bill */}
+              <div style={{ display: 'grid', gridTemplateColumns: (activeOrders.find(o => o.id === activeOrderId)?.kot_printed) ? '1fr' : '1fr 1fr', gap: 8 }}>
+                <button className="bill-btn" onClick={() => { if (!cart.length) { toast.error('No items'); return; } setShowPay(true) }}
+                  style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  💳 Pay & Bill
+                </button>
+                {!(activeOrders.find(o => o.id === activeOrderId)?.kot_printed) && (
+                  <button className="btn" onClick={printKOT} disabled={!cart.length || saving}
+                    style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#2c3e50', color: '#fff', border: 'none' }}>
+                    {saving ? <span className="spinner" style={{ width: 14, height: 14, borderTopColor: '#fff' }} /> : '👨‍🍳 Print KOT'}
+                  </button>
+                )}
+              </div>
+
+              {cart.length > 0 && (
+                <button onClick={() => setPosState({ cart: [], discount: 0, activeOrderId: null })}
+                  style={{ width: '100%', marginTop: 6, padding: '6px', background: 'none', border: '1px solid #fca5a5', color: '#c0392b', borderRadius: 'var(--radius)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                  Clear Order
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ═══════════ PAYMENT MODAL ═══════════ */}
+      {showPay && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowPay(false)}>
+          <div className="modal" style={{ width: 420 }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 36, height: 36, background: '#c0392b', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🧾</div>
+                <div>
+                  <div className="modal-title">Generate Bill</div>
+                  {selectedTable && <div style={{ fontSize: 12, color: 'var(--text2)' }}>Table {selectedTable.number} — {selectedTable.section}</div>}
+                </div>
+              </div>
+              <button className="btn btn-sm" onClick={() => setShowPay(false)}>✕</button>
+            </div>
+
+            {/* Order summary */}
+            <div style={{ background: 'var(--bg)', borderRadius: 'var(--radius)', padding: 14, marginBottom: 16 }}>
+              {cart.map(i => (
+                <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, marginBottom: 6, color: 'var(--text2)' }}>
+                  <span>{i.name} × {i.qty}</span>
+                  <span>₹{(i.price * i.qty).toFixed(2)}</span>
+                </div>
+              ))}
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 8 }}>
+                {[['Subtotal', `₹${subtotal.toFixed(2)}`],
+                ].map(([l, v], i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--text2)', marginBottom: 4 }}><span>{l}</span><span>{v}</span></div>
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 800, color: '#c0392b', marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                  <span>Grand Total</span><span>₹{total.toFixed(0)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Discount */}
+            <div className="form-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                <label className="form-label" style={{ marginBottom: 0 }}>Discount</label>
+                <div style={{ display: 'flex', gap: 4, background: '#f0f2f5', padding: 2, borderRadius: 6 }}>
+                  <button
+                    onClick={() => setPosState({ discountType: 'amt' })}
+                    style={{ border: 'none', padding: '2px 8px', fontSize: 10, fontWeight: 700, borderRadius: 4, cursor: 'pointer', background: discountType === 'amt' ? '#fff' : 'transparent', boxShadow: discountType === 'amt' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
+                  >₹ Amt</button>
+                  <button
+                    onClick={() => setPosState({ discountType: 'pct' })}
+                    style={{ border: 'none', padding: '2px 8px', fontSize: 10, fontWeight: 700, borderRadius: 4, cursor: 'pointer', background: discountType === 'pct' ? '#fff' : 'transparent', boxShadow: discountType === 'pct' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
+                  >% Pct</button>
+                </div>
+              </div>
+              <div style={{ position: 'relative' }}>
+                <input
+                  className={`form-input ${isInvalidDiscount ? 'invalid' : ''}`}
+                  type="number"
+                  value={discount}
+                  min={0}
+                  onChange={e => setPosState({ discount: parseFloat(e.target.value) || 0 })}
+                  style={{ borderColor: isInvalidDiscount ? '#e74c3c' : '' }}
+                />
+                {discountType === 'pct' && <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--text3)' }}>%</span>}
+                {discountType === 'amt' && <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--text3)' }}>₹</span>}
+              </div>
+              {isInvalidDiscount && <div style={{ color: '#e74c3c', fontSize: 10, fontWeight: 700, marginTop: 4 }}>⚠️ Invalid discount: Exceeds total amount!</div>}
+              {discountType === 'pct' && discount > 0 && !isInvalidDiscount && (
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Equivalent to ₹{discountAmt} discount</div>
+              )}
+            </div>
+
+            {/* Payment methods */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>Payment Method</div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', color: splitPay ? '#c0392b' : 'var(--text3)' }}>
+                <input type="checkbox" checked={splitPay} onChange={e => { setSplitPay(e.target.checked); if (e.target.checked) setSplitAmts({ cash: total, card: 0, upi: 0 }) }} />
+                Split Payment
+              </label>
+            </div>
+
+            {splitPay ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20, background: '#f8f9fb', padding: 12, borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+                {[['cash', '💵 Cash'], ['card', '💳 Card'], ['upi', '📱 UPI']].map(([m, label]) => (
+                  <div key={m} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
+                    <input
+                      className="form-input"
+                      type="number"
+                      value={splitAmts[m] || ''}
+                      onChange={e => {
+                        const val = parseFloat(e.target.value) || 0;
+                        const newAmts = { ...splitAmts, [m]: val };
+                        if (m !== 'cash') {
+                          const other = (m === 'card' ? val + splitAmts.upi : val + splitAmts.card);
+                          newAmts.cash = Math.max(0, total - other);
+                        }
+                        setSplitAmts(newAmts);
+                      }}
+                      style={{ maxWidth: 100, textAlign: 'right', height: 30, fontSize: 13 }}
+                      placeholder="0"
+                    />
+                  </div>
+                ))}
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 4, display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: (Object.values(splitAmts).reduce((a, b) => a + b, 0) === total) ? '#27ae60' : '#c0392b' }}>
+                  <span>Allocated: ₹{Object.values(splitAmts).reduce((a, b) => a + b, 0)}</span>
+                  <span>Balance: ₹{total - Object.values(splitAmts).reduce((a, b) => a + b, 0)}</span>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 20 }}>
+                {[['cash', '💵', 'Cash'], ['card', '💳', 'Card'], ['upi', '📱', 'UPI / QR']].map(([m, icon, label]) => (
+                  <button key={m} onClick={() => setPayMethod(m)} style={{
+                    padding: '12px 8px', borderRadius: 'var(--radius)', fontFamily: 'inherit',
+                    border: `2px solid ${payMethod === m ? '#c0392b' : 'var(--border)'}`,
+                    background: payMethod === m ? '#fff5f5' : '#fff',
+                    color: payMethod === m ? '#c0392b' : 'var(--text2)',
+                    cursor: 'pointer', fontSize: 12, fontWeight: 700, textAlign: 'center'
+                  }}>{icon}<br />{label}</button>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setShowPay(false)}>Cancel</button>
+              <button className="bill-btn" style={{ flex: 2, borderRadius: 'var(--radius)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={confirmBill} disabled={saving}>
+                {saving ? <span className="spinner" style={{ width: 16, height: 16, borderTopColor: '#fff' }} /> : `✓ Confirm & Print — ₹${total.toFixed(0)}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* THERMAL PRINTER RECEIPT / KOT FORMAT (Hidden on screen, visible only when printing) */}
+      <div className="print-only receipt-content">
+        <h2>RestauraQ</h2>
+        <div style={{ textAlign: 'center', marginBottom: 5 }}>Kitchen Order Ticket (KOT)</div>
+        <hr />
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span>Table: {selectedTable?.num || 'N/A'}</span>
+          <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+        </div>
+        <div style={{ marginBottom: 5 }}>Type: {orderType.toUpperCase()}</div>
+        <hr />
+        <table>
+          <thead>
+            <tr>
+              <th style={{ width: '15%' }}>Qty</th>
+              <th style={{ width: '85%' }}>Item</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cart.map((item, idx) => (
+              <tr key={idx}>
+                <td className="qty" style={{ verticalAlign: 'top', paddingTop: 4 }}><strong>{item.qty}</strong></td>
+                <td style={{ paddingTop: 4 }}>
+                  <div style={{ fontWeight: 'bold' }}>{item.name}</div>
+                  {item.notes && <div style={{ fontSize: 11, fontStyle: 'italic' }}>Note: {item.notes}</div>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <hr />
+        <div style={{ textAlign: 'center', fontSize: 12, marginTop: 10 }}>*** End of KOT ***</div>
+      </div>
+    </div>
+  )
+}
