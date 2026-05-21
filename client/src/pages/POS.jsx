@@ -24,6 +24,7 @@ export default function POS() {
   const [saving, setSaving] = useState(false)
   const [splitPay, setSplitPay] = useState(false)
   const [splitAmts, setSplitAmts] = useState({ cash: 0, card: 0, upi: 0 })
+  const [printMode, setPrintMode] = useState('kot')
 
   const { subtotal, discountAmt, total, isInvalidDiscount } = React.useMemo(() => {
     const s = cart.reduce((sum, i) => sum + (Number(i.price || 0) * i.qty), 0)
@@ -141,7 +142,8 @@ export default function POS() {
         await fetchOrders();
       }
       toast.success('KOT Sent to Kitchen', { icon: '👨‍🍳' })
-      window.print();
+      setPrintMode('kot')
+      setTimeout(() => window.print(), 100);
     } catch (e) { toast.error('KOT Failed') }
     finally { setSaving(false) }
   }
@@ -166,10 +168,15 @@ export default function POS() {
       const payData = splitPay ? splitAmts : { [payMethod]: total }
       const bill = await generateBill(orderId, payData, discountAmt)
       setShowPay(false);
-      setPosState({ cart: [], activeOrderId: null, selectedTable: null, discount: 0, discountType: 'amt', customerName: '' })
-      setStep(orderType === 'dine-in' ? 'tables' : 'items')
-      await fetchTables()
       toast.success(`✅ Bill ₹${bill.total} — ${payMethod.toUpperCase()}`)
+      
+      setPrintMode('bill')
+      setTimeout(() => {
+        window.print();
+        setPosState({ cart: [], activeOrderId: null, selectedTable: null, discount: 0, discountType: 'amt', customerName: '' })
+        setStep(orderType === 'dine-in' ? 'tables' : 'items')
+        fetchTables()
+      }, 300);
     } catch (err) { toast.error('Billing failed') }
     finally { setSaving(false) }
   }
@@ -586,7 +593,9 @@ export default function POS() {
       {/* THERMAL PRINTER RECEIPT / KOT FORMAT (Hidden on screen, visible only when printing) */}
       <div className="print-only receipt-content">
         <h2>RestauraQ</h2>
-        <div style={{ textAlign: 'center', marginBottom: 5 }}>Kitchen Order Ticket (KOT)</div>
+        <div style={{ textAlign: 'center', marginBottom: 5 }}>
+          {printMode === 'kot' ? 'Kitchen Order Ticket (KOT)' : 'INVOICE'}
+        </div>
         <hr />
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span>Table: {selectedTable?.num || 'N/A'}</span>
@@ -598,7 +607,8 @@ export default function POS() {
           <thead>
             <tr>
               <th style={{ width: '15%' }}>Qty</th>
-              <th style={{ width: '85%' }}>Item</th>
+              <th style={{ width: printMode === 'bill' ? '55%' : '85%' }}>Item</th>
+              {printMode === 'bill' && <th style={{ width: '30%', textAlign: 'right' }}>Price</th>}
             </tr>
           </thead>
           <tbody>
@@ -606,15 +616,28 @@ export default function POS() {
               <tr key={idx}>
                 <td className="qty" style={{ verticalAlign: 'top', paddingTop: 4 }}><strong>{item.qty}</strong></td>
                 <td style={{ paddingTop: 4 }}>
-                  <div style={{ fontWeight: 'bold' }}>{item.name}</div>
-                  {item.notes && <div style={{ fontSize: 11, fontStyle: 'italic' }}>Note: {item.notes}</div>}
+                  <div style={{ fontWeight: printMode === 'kot' ? 'bold' : 'normal' }}>{item.name}</div>
+                  {item.notes && printMode === 'kot' && <div style={{ fontSize: 11, fontStyle: 'italic' }}>Note: {item.notes}</div>}
                 </td>
+                {printMode === 'bill' && (
+                  <td style={{ paddingTop: 4, textAlign: 'right', verticalAlign: 'top' }}>
+                    {((item.price || 0) * item.qty).toFixed(2)}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
         <hr />
-        <div style={{ textAlign: 'center', fontSize: 12, marginTop: 10 }}>*** End of KOT ***</div>
+        {printMode === 'bill' && (
+          <div style={{ fontSize: 16, fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', marginTop: 10, marginBottom: 10 }}>
+            <span>TOTAL</span>
+            <span>₹{total.toFixed(2)}</span>
+          </div>
+        )}
+        <div style={{ textAlign: 'center', fontSize: 12, marginTop: 10 }}>
+          {printMode === 'kot' ? '*** End of KOT ***' : '*** Thank you for visiting! ***'}
+        </div>
       </div>
     </div>
   )
