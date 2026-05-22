@@ -1,8 +1,6 @@
-import { app, BrowserWindow, shell, ipcMain } from 'electron'
-import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import pkg from 'electron-updater'
-const { autoUpdater } = pkg
+const { app, BrowserWindow, shell, ipcMain } = require('electron')
+const { join } = require('node:path')
+const { autoUpdater } = require('electron-updater')
 
 // Ensure app is a single instance
 if (!app.requestSingleInstanceLock()) {
@@ -12,9 +10,8 @@ if (!app.requestSingleInstanceLock()) {
 
 let win = null
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const preload = join(__dirname, 'preload.js')
-const indexHtml = join(__dirname, '../dist/index.html')
+const indexHtml = join(__dirname, 'dist/index.html')
 
 function createWindow() {
   win = new BrowserWindow({
