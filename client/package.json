@@ -4,6 +4,7 @@
   "description": "Restauraq POS Client Application",
   "author": "Mahidharchowdary",
   "private": true,
+  "type": "module",
   "engines": {
     "node": "22.x"
   },
