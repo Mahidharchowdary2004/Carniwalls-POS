@@ -13,7 +13,6 @@
     "start": "npm run start --workspace=server"
   },
   "devDependencies": {
-    "@rollup/rollup-win32-x64-msvc": "^4.60.4",
     "concurrently": "^8.2.2"
   }
 }
