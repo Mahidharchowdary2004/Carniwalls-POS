@@ -8,8 +8,27 @@ export default function Settings() {
   const [saving, setSaving]   = useState(false)
   const [activeTab, setActiveTab] = useState('outlet')
 
+  // Updater State
+  const [version, setVersion] = useState('')
+  const [updateStatus, setUpdateStatus] = useState(null)
+  const [updateProgress, setUpdateProgress] = useState(0)
+
   useEffect(() => {
     api.get('/outlets/o1').then(r => { setOutlet(r.data); setForm(r.data) })
+
+    if (window.ipcRenderer) {
+      window.ipcRenderer.invoke('get-version').then(v => setVersion(v))
+
+      window.ipcRenderer.on('updater-status', (event, data) => {
+        setUpdateStatus(data.status)
+        if (data.status === 'error') toast.error('Update error: ' + data.message)
+        if (data.status === 'not-available') toast.success('You are on the latest version!')
+      })
+
+      window.ipcRenderer.on('updater-progress', (event, percent) => {
+        setUpdateProgress(Math.round(percent))
+      })
+    }
   }, [])
 
   async function handleSave() {
@@ -103,6 +122,36 @@ export default function Settings() {
               <button className="btn btn-primary" style={{ width:'100%', justifyContent:'center' }} onClick={() => toast.success('Hours saved')}>
                 Save Hours
               </button>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header"><div className="card-title">Software Updates</div></div>
+            <div className="card-body">
+              <div style={{ marginBottom: 14, fontSize: 14 }}>
+                Current Version: <span className="badge badge-info">v{version || '1.0.0'}</span>
+              </div>
+              
+              {updateStatus === 'checking' && <div style={{ color: 'var(--text2)', marginBottom: 10, fontSize: 13 }}>Checking for updates...</div>}
+              {updateStatus === 'available' && <div style={{ color: 'var(--text2)', marginBottom: 10, fontSize: 13 }}>Update found! Downloading... {updateProgress}%</div>}
+              {updateStatus === 'downloaded' && <div style={{ color: '#27ae60', marginBottom: 10, fontSize: 13 }}>Update ready to install!</div>}
+
+              {updateStatus === 'downloaded' ? (
+                <button className="btn btn-primary" style={{ width:'100%', justifyContent:'center' }} onClick={() => window.ipcRenderer.send('install-update')}>
+                  Restart & Install Update
+                </button>
+              ) : (
+                <button className="btn" style={{ width:'100%', justifyContent:'center', border: '1px solid var(--border)' }} onClick={() => {
+                  if (window.ipcRenderer) {
+                    setUpdateStatus('checking')
+                    window.ipcRenderer.send('check-for-updates')
+                  } else {
+                    toast.error('Updates only available in Desktop App')
+                  }
+                }} disabled={updateStatus === 'checking' || updateStatus === 'available'}>
+                  Check for Updates
+                </button>
+              )}
             </div>
           </div>
         </div>

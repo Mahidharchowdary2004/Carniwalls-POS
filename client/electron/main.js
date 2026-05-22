@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, shell, ipcMain } from 'electron'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { autoUpdater } from 'electron-updater'
@@ -78,4 +78,34 @@ app.on('activate', () => {
   } else {
     createWindow()
   }
+})
+
+// --- IPC Handlers for Auto Updater ---
+ipcMain.handle('get-version', () => app.getVersion())
+
+ipcMain.on('check-for-updates', () => {
+  autoUpdater.checkForUpdates()
+})
+
+ipcMain.on('install-update', () => {
+  autoUpdater.quitAndInstall()
+})
+
+autoUpdater.on('checking-for-update', () => {
+  win?.webContents.send('updater-status', { status: 'checking' })
+})
+autoUpdater.on('update-available', () => {
+  win?.webContents.send('updater-status', { status: 'available' })
+})
+autoUpdater.on('update-not-available', () => {
+  win?.webContents.send('updater-status', { status: 'not-available' })
+})
+autoUpdater.on('error', (err) => {
+  win?.webContents.send('updater-status', { status: 'error', message: err.message })
+})
+autoUpdater.on('download-progress', (progressObj) => {
+  win?.webContents.send('updater-progress', progressObj.percent)
+})
+autoUpdater.on('update-downloaded', () => {
+  win?.webContents.send('updater-status', { status: 'downloaded' })
 })
