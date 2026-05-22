@@ -12,6 +12,7 @@ if (!app.requestSingleInstanceLock()) {
 
 let win = null
 
+const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const preload = join(__dirname, 'preload.js')
 const indexHtml = join(__dirname, '../dist/index.html')
 
