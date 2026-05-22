@@ -49,6 +49,14 @@ function createWindow() {
     if (url.startsWith('https:')) shell.openExternal(url)
     return { action: 'deny' }
   })
+
+  // Allow opening DevTools with Ctrl+Shift+I in production
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+      win.webContents.toggleDevTools()
+      event.preventDefault()
+    }
+  })
 }
 
 app.whenReady().then(() => {

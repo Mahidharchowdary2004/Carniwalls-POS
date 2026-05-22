@@ -2,7 +2,8 @@ import axios from 'axios'
 import { create } from 'zustand'
 import { io } from 'socket.io-client'
 
-const BACKEND_URL = 'https://carniwalls-pos-server.vercel.app'
+const isDev = import.meta.env.DEV
+const BACKEND_URL = isDev ? 'http://localhost:3001' : 'https://carniwalls-pos-server.vercel.app'
 const BASE = `${BACKEND_URL}/api`
 const socket = io(BACKEND_URL)
 
