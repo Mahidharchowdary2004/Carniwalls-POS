@@ -41,6 +41,7 @@ export default function SalesSummary() {
           </div>
         )}
         <div className="spacer" />
+        <button className="btn btn-sm" onClick={() => window.print()}>🖨️ Print</button>
         <button className="btn btn-sm">📄 Export PDF</button>
         <button className="btn btn-sm">📊 Export Excel</button>
       </div>

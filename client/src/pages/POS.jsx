@@ -25,6 +25,7 @@ export default function POS() {
   const [splitPay, setSplitPay] = useState(false)
   const [splitAmts, setSplitAmts] = useState({ cash: 0, card: 0, upi: 0 })
   const [printMode, setPrintMode] = useState('kot')
+  const [lastBill, setLastBill] = useState(null)
 
   const { subtotal, discountAmt, total, isInvalidDiscount } = React.useMemo(() => {
     const s = cart.reduce((sum, i) => sum + (Number(i.price || 0) * i.qty), 0)
@@ -116,15 +117,41 @@ export default function POS() {
 
   /* ── CART ── */
   function addItem(item) {
+    if (parseFloat(item.stock || 0) <= 0) {
+      toast.error(`${item.name} is out of stock!`);
+      return;
+    }
     const ex = cart.find(i => i.id === item.id)
+    if (ex && ex.qty >= parseFloat(item.stock || 0)) {
+      toast.error(`Cannot add more. Only ${parseFloat(item.stock || 0)} in stock!`);
+      return;
+    }
     const newCart = ex ? cart.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i)
       : [...cart, { ...item, qty: 1 }]
     setPosState({ cart: newCart })
     toast.success(`${item.name} added`, { icon: '🛒', duration: 800, position: 'bottom-center' })
   }
   function changeQty(id, delta) {
-    const newCart = cart.map(i => i.id === id ? { ...i, qty: i.qty + delta } : i).filter(i => i.qty > 0)
-    setPosState({ cart: newCart })
+    const itemInMenu = menuItems.find(i => i.id === id);
+    const stockLimit = itemInMenu ? parseFloat(itemInMenu.stock || 0) : 999;
+    
+    let hitLimit = false;
+    const newCart = cart.map(i => {
+      if (i.id === id) {
+        if (delta > 0 && i.qty >= stockLimit) {
+          hitLimit = true;
+          return i;
+        }
+        return { ...i, qty: i.qty + delta };
+      }
+      return i;
+    }).filter(i => i.qty > 0)
+    
+    if (hitLimit) {
+      toast.error(`Cannot add more. Only ${stockLimit} in stock!`);
+    } else {
+      setPosState({ cart: newCart })
+    }
   }
   function removeItem(id) {
     setPosState({ cart: cart.filter(i => i.id !== id) })
@@ -168,6 +195,7 @@ export default function POS() {
       const payData = splitPay ? splitAmts : { [payMethod]: total }
       const bill = await generateBill(orderId, payData, discountAmt)
       setShowPay(false);
+      setLastBill(bill);
       toast.success(`✅ Bill ₹${bill.total} — ${payMethod.toUpperCase()}`)
       
       setPrintMode('bill')
@@ -181,10 +209,13 @@ export default function POS() {
     finally { setSaving(false) }
   }
 
-  /* ── TABLE STATUS COLOR ── */
   const tbColor = { free: '#e2e6ec', occupied: '#c0392b', reserved: '#2980b9' }
 
   const getCat = (id) => categories.find(c => String(c.id) === String(id))
+
+  const currentOrder = activeOrders.find(o => o.id === activeOrderId);
+  const displayTokenNo = currentOrder?.token_no || '1';
+  const displayBillNo = lastBill?.bill_no || displayTokenNo;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 52px)', overflow: 'hidden', background: '#f4f6f9' }}>
@@ -335,6 +366,7 @@ export default function POS() {
                           key={item.id}
                           className={`menu-item-card ${inCart ? 'in-cart' : ''}`}
                           onClick={() => addItem(item)}
+                          style={{ opacity: parseFloat(item.stock || 0) <= 0 ? 0.5 : 1, cursor: parseFloat(item.stock || 0) <= 0 ? 'not-allowed' : 'pointer' }}
                         >
                           {inCart && (
                             <div style={{ position: 'absolute', top: 6, right: 6, background: '#c0392b', color: '#fff', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800 }}>
@@ -592,52 +624,103 @@ export default function POS() {
 
       {/* THERMAL PRINTER RECEIPT / KOT FORMAT (Hidden on screen, visible only when printing) */}
       <div className="print-only receipt-content">
-        <h2>RestauraQ</h2>
-        <div style={{ textAlign: 'center', marginBottom: 5 }}>
-          {printMode === 'kot' ? 'Kitchen Order Ticket (KOT)' : 'INVOICE'}
-        </div>
-        <hr />
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>Table: {selectedTable?.num || 'N/A'}</span>
-          <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-        </div>
-        <div style={{ marginBottom: 5 }}>Type: {orderType.toUpperCase()}</div>
-        <hr />
-        <table>
-          <thead>
-            <tr>
-              <th style={{ width: '15%' }}>Qty</th>
-              <th style={{ width: printMode === 'bill' ? '55%' : '85%' }}>Item</th>
-              {printMode === 'bill' && <th style={{ width: '30%', textAlign: 'right' }}>Price</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {cart.map((item, idx) => (
-              <tr key={idx}>
-                <td className="qty" style={{ verticalAlign: 'top', paddingTop: 4 }}><strong>{item.qty}</strong></td>
-                <td style={{ paddingTop: 4 }}>
-                  <div style={{ fontWeight: printMode === 'kot' ? 'bold' : 'normal' }}>{item.name}</div>
-                  {item.notes && printMode === 'kot' && <div style={{ fontSize: 11, fontStyle: 'italic' }}>Note: {item.notes}</div>}
-                </td>
-                {printMode === 'bill' && (
-                  <td style={{ paddingTop: 4, textAlign: 'right', verticalAlign: 'top' }}>
-                    {((item.price || 0) * item.qty).toFixed(2)}
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <hr />
-        {printMode === 'bill' && (
-          <div style={{ fontSize: 16, fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', marginTop: 10, marginBottom: 10 }}>
-            <span>TOTAL</span>
-            <span>₹{total.toFixed(2)}</span>
-          </div>
+        {printMode === 'kot' ? (
+          <>
+            <div style={{ textAlign: 'center', marginBottom: 4 }}>
+              <div>{new Date().toLocaleDateString('en-GB', { year: '2-digit', month: '2-digit', day: '2-digit' })} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
+              <div>KOT - {displayTokenNo}</div>
+              <div>{orderType === 'dine-in' ? 'dine in' : orderType}</div>
+              <div><strong>Table No: {selectedTable?.number || 'N/A'}</strong></div>
+            </div>
+            <div style={{ borderTop: '1px dashed #000', margin: '4px 0' }} />
+            <table style={{ width: '100%', fontSize: '14px' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', fontWeight: 'normal', padding: '2px 0' }}>Item</th>
+                  <th style={{ textAlign: 'right', fontWeight: 'normal', padding: '2px 0' }}>Qty.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cart.map((item, idx) => (
+                  <tr key={idx}>
+                    <td style={{ textAlign: 'left', paddingRight: '10px', padding: '2px 0', fontWeight: 'bold' }}>{item.name}</td>
+                    <td style={{ textAlign: 'right', padding: '2px 0' }}>{item.qty}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : (
+          <>
+            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '16px', marginTop: '10px' }}>
+              BABA DAIRY MILK PRODUCTS
+            </div>
+            <div style={{ textAlign: 'center', fontSize: '13px', margin: '4px 0' }}>
+              D.No. 2-13-80, Servey No. 411-A,<br />
+              411-B, 2nd Ward<br />
+              East Side of National Highway Road,<br />
+              Kovur,<br />
+              Sri Potti Sriramulu Nellore, Andhra<br />
+              Pradesh -524137
+            </div>
+            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+            <div style={{ fontSize: '14px', margin: '2px 0' }}>
+              Name: {customerName || ''}
+            </div>
+            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+              <span>Date: {new Date().toLocaleDateString('en-GB', { year: '2-digit', month: '2-digit', day: '2-digit' })}</span>
+              <span><strong>dine in: {selectedTable?.number || ''}</strong></span>
+            </div>
+            <div style={{ fontSize: '14px' }}>
+              {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+              <span>Cashier: biller</span>
+              <span>Bill No.: {displayBillNo}</span>
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: 'bold' }}>
+              Token No.: {displayTokenNo}
+            </div>
+            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+            <table style={{ width: '100%', fontSize: '14px' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', fontWeight: 'normal', padding: '2px 0' }}>Item</th>
+                  <th style={{ textAlign: 'center', fontWeight: 'normal', padding: '2px 0' }}>Qty.</th>
+                  <th style={{ textAlign: 'right', fontWeight: 'normal', padding: '2px 0' }}>Price</th>
+                  <th style={{ textAlign: 'right', fontWeight: 'normal', padding: '2px 0' }}>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cart.map((item, idx) => (
+                  <tr key={idx}>
+                    <td style={{ textAlign: 'left', paddingRight: '2px', padding: '2px 0' }}>{item.name}</td>
+                    <td style={{ textAlign: 'center', padding: '2px 0' }}>{item.qty}</td>
+                    <td style={{ textAlign: 'right', padding: '2px 0' }}>{Number(item.price || 0).toFixed(2)}</td>
+                    <td style={{ textAlign: 'right', padding: '2px 0' }}>{(Number(item.price || 0) * item.qty).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+              <span>Total Qty: {cart.reduce((sum, i) => sum + i.qty, 0)}</span>
+              <span>Sub Total &nbsp;&nbsp; {subtotal.toFixed(2)}</span>
+            </div>
+            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+            <div style={{ textAlign: 'right', fontSize: '16px', fontWeight: 'bold', margin: '4px 0' }}>
+              Grand Total &nbsp; ₹ {total.toFixed(2)}
+            </div>
+            <div style={{ fontSize: '12px', margin: '2px 0' }}>
+              Paid via {splitPay ? 'Split' : 'Other'} [{payMethod.toUpperCase()}]
+            </div>
+            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+            <div style={{ textAlign: 'center', fontSize: '14px', marginTop: '6px' }}>
+              Thank You | Please Visit Again
+            </div>
+          </>
         )}
-        <div style={{ textAlign: 'center', fontSize: 12, marginTop: 10 }}>
-          {printMode === 'kot' ? '*** End of KOT ***' : '*** Thank you for visiting! ***'}
-        </div>
       </div>
     </div>
   )

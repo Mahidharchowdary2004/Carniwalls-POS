@@ -14,7 +14,19 @@ export default function Settings() {
   const [updateProgress, setUpdateProgress] = useState(0)
 
   useEffect(() => {
-    api.get('/outlets/o1').then(r => { setOutlet(r.data); setForm(r.data) })
+    api.get('/outlets/out_main').then(r => { 
+      if (r.data) {
+        setOutlet(r.data); 
+        setForm(r.data);
+      } else {
+        toast.error('Outlet not found');
+        setOutlet({}); // Prevent infinite load
+      }
+    }).catch(e => {
+      console.error(e);
+      toast.error('Failed to load settings');
+      setOutlet({});
+    })
 
     if (window.ipcRenderer) {
       window.ipcRenderer.invoke('get-version').then(v => setVersion(v))
@@ -34,7 +46,7 @@ export default function Settings() {
   async function handleSave() {
     setSaving(true)
     try {
-      const { data } = await api.put('/outlets/o1', form)
+      const { data } = await api.put('/outlets/out_main', form)
       setOutlet(data)
       toast.success('Settings saved ✓')
     } catch { toast.error('Failed to save') }

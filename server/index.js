@@ -345,10 +345,15 @@ app.post('/api/orders', auth, async (req, res) => {
     const subtotal = items.reduce((s, i) => s + (i.price * i.qty), 0);
 
     const id = `ord_${Date.now()}`;
+    
+    // Get daily token number
+    const tRes = await db.query('SELECT COALESCE(MAX(token_no), 0) as max_token FROM orders WHERE outlet_id = $1 AND created_at::date = CURRENT_DATE', [req.user.outlet_id]);
+    const token_no = parseInt(tRes.rows[0].max_token) + 1;
+
     const { rows } = await db.query(`
-      INSERT INTO orders (id, table_id, items, order_type, customer_name, subtotal, cgst, sgst, discount, total, status, kot_status, notes, outlet_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, 'open', 'preparing', $10, $11) RETURNING *
-    `, [id, table_id, JSON.stringify(items), order_type, customer_name, subtotal, 0, 0, subtotal, notes, req.user.outlet_id]);
+      INSERT INTO orders (id, table_id, items, order_type, customer_name, subtotal, cgst, sgst, discount, total, status, kot_status, notes, outlet_id, token_no)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, 'open', 'preparing', $10, $11, $12) RETURNING *
+    `, [id, table_id, JSON.stringify(items), order_type, customer_name, subtotal, 0, 0, subtotal, notes, req.user.outlet_id, token_no]);
 
     const order = rows[0];
 
@@ -445,10 +450,15 @@ app.post('/api/bills', auth, async (req, res) => {
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
     const billId = `bill_${Date.now()}`;
+    
+    // Get daily bill number
+    const bRes = await db.query('SELECT COALESCE(MAX(bill_no), 0) as max_bill FROM bills WHERE outlet_id = $1 AND created_at::date = CURRENT_DATE', [req.user.outlet_id]);
+    const bill_no = parseInt(bRes.rows[0].max_bill) + 1;
+
     const { rows } = await db.query(`
-      INSERT INTO bills (id, order_id, table_id, order_type, items, subtotal, cgst, sgst, discount, total, payment_method, status, outlet_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'paid', $12) RETURNING *
-    `, [billId, order_id, order.table_id, order.order_type, JSON.stringify(order.items), order.subtotal, 0, 0, discount, order.subtotal - discount, payment_method, req.user.outlet_id]);
+      INSERT INTO bills (id, order_id, table_id, order_type, items, subtotal, cgst, sgst, discount, total, payment_method, status, outlet_id, bill_no)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'paid', $12, $13) RETURNING *
+    `, [billId, order_id, order.table_id, order.order_type, JSON.stringify(order.items), order.subtotal, 0, 0, discount, order.subtotal - discount, payment_method, req.user.outlet_id, bill_no]);
 
     await db.query('UPDATE orders SET status = \'billed\' WHERE id = $1', [order_id]);
     if (order.table_id) {
@@ -871,6 +881,8 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
     await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS stock DECIMAL(10,2) DEFAULT 0');
     await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS min_stock DECIMAL(10,2) DEFAULT 0');
     await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS kot_printed BOOLEAN DEFAULT FALSE');
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS token_no INTEGER');
+    await db.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS bill_no INTEGER');
     await db.query('ALTER TABLE inventory ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
     await db.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
     await db.query('ALTER TABLE staff ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
