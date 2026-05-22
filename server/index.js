@@ -778,8 +778,9 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
 
-server.listen(PORT, async () => {
-  console.log(`🍽️  RestauraQ Server running on port ${PORT}`);
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  server.listen(PORT, async () => {
+    console.log(`🍽️  RestauraQ Server running on port ${PORT}`);
 
   // Auto-migration on startup
   try {
@@ -894,4 +895,7 @@ server.listen(PORT, async () => {
   } catch (err) {
     console.error('⚠️ Startup migration failed:', err.message);
   }
-});
+  });
+}
+
+module.exports = app;
