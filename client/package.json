@@ -4,6 +4,9 @@
   "description": "Restauraq POS Client Application",
   "author": "Mahidharchowdary",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -24,6 +27,6 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
     "esbuild": "^0.28.0",
-    "vite": "latest"
+    "vite": "^5.4.19"
   }
 }
