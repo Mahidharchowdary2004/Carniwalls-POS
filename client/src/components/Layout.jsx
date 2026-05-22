@@ -52,7 +52,7 @@ export default function Layout() {
       {/* SIDEBAR */}
       <aside className={`sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
         <div className="sidebar-logo">
-          <img src="/logo.png" alt="Logo" className="logo-img" />
+          <img src="./logo.png" alt="Logo" className="logo-img" />
         </div>
 
         <nav className="nav">

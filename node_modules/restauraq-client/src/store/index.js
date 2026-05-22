@@ -2,8 +2,9 @@ import axios from 'axios'
 import { create } from 'zustand'
 import { io } from 'socket.io-client'
 
-const BASE = '/api'
-const socket = io(window.location.origin.replace('5173', '3001')) // Assuming dev server proxy
+const BACKEND_URL = 'https://carniwalls-pos-server.vercel.app'
+const BASE = `${BACKEND_URL}/api`
+const socket = io(BACKEND_URL)
 
 const api = axios.create({ baseURL: BASE })
 api.interceptors.request.use(cfg => {

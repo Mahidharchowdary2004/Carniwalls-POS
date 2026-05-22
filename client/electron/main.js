@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { autoUpdater } from 'electron-updater'
 
 // Ensure app is a single instance
 if (!app.requestSingleInstanceLock()) {
@@ -50,7 +51,12 @@ function createWindow() {
   })
 }
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  createWindow()
+  
+  // Silently check for updates on startup
+  autoUpdater.checkForUpdatesAndNotify()
+})
 
 app.on('window-all-closed', () => {
   win = null

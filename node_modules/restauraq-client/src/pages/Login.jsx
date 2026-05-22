@@ -64,7 +64,7 @@ export default function Login() {
       <div style={{ width: 420 }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 30 }}>
-          <img src="/logo.png" alt="Logo" style={{ width: 180, marginBottom: 10 }} />
+          <img src="./logo.png" alt="Logo" style={{ width: 180, marginBottom: 10 }} />
           <div style={{ fontSize: 13, color: '#5a6478', fontWeight: 500 }}>Cloud Restaurant Management System</div>
         </div>
 
