@@ -15,7 +15,7 @@ const indexHtml = join(__dirname, 'dist/index.html')
 
 function createWindow() {
   win = new BrowserWindow({
-    title: 'Restauraq POS',
+    title: 'CarniWalls-POS',
     width: 1200,
     height: 800,
     webPreferences: {

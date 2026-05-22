@@ -1,10 +1,11 @@
 {
-  "name": "restauraq-desktop",
-  "version": "1.0.3",
-  "description": "Restauraq POS Desktop Application",
+  "name": "carniwalls-pos",
+  "version": "1.0.5",
+  "description": "CarniWalls-POS Desktop Application",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "dev": "powershell -Command \"$env:VITE_DEV_SERVER_URL='http://localhost:5173'; electron .\"",
     "prebuild": "npm run build --prefix ../client && powershell -Command \"if (Test-Path dist) { Remove-Item -Recurse -Force dist }; Copy-Item -Recurse -Force ../client/dist ./dist\"",
     "build": "npm run prebuild && electron-builder",
     "publish": "npm run prebuild && electron-builder -p always",
@@ -12,11 +13,13 @@
     "electron:publish": "npm run publish"
   },
   "build": {
-    "appId": "com.restauraq.pos",
-    "productName": "Restauraq POS",
+    "appId": "com.carniwalls.pos",
+    "productName": "CarniWalls-POS",
     "electronVersion": "42.2.0",
+    "icon": "../client/public/logo.png",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "../client/public"
     },
     "files": [
       "main.js",
