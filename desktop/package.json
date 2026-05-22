@@ -1,0 +1,48 @@
+{
+  "name": "restauraq-desktop",
+  "version": "1.0.2",
+  "description": "Restauraq POS Desktop Application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "prebuild": "powershell -Command \"if (Test-Path dist) { Remove-Item -Recurse -Force dist }; Copy-Item -Recurse -Force ../client/dist ./dist\"",
+    "build": "npm run prebuild && electron-builder",
+    "publish": "npm run prebuild && electron-builder -p always"
+  },
+  "build": {
+    "appId": "com.restauraq.pos",
+    "productName": "Restauraq POS",
+    "electronVersion": "42.2.0",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "dist/**/*"
+    ],
+    "win": {
+      "target": ["nsis"]
+    },
+    "mac": {
+      "target": ["dmg"]
+    },
+    "linux": {
+      "target": ["AppImage"]
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Mahidharchowdary2004",
+        "repo": "Carniwalls-POS"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
+  },
+  "devDependencies": {
+    "electron": "^42.2.0",
+    "electron-builder": "^26.8.1"
+  }
+}
