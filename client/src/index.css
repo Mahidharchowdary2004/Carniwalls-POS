@@ -1155,7 +1155,7 @@ tr:hover td {
 
 .receipt-content hr {
   border: none;
-  border-top: 1px dashed #000;
+  border-top: 1px solid #000;
   margin: 10px 0;
 }
 
@@ -1212,6 +1212,11 @@ tr:hover td {
   .main { margin: 0 !important; width: 100% !important; }
   .content { padding: 0 !important; }
 
+  @page {
+    margin: 0;
+    size: 80mm auto;
+  }
+
   /* Receipt printing styles (only active when a .print-only element exists on the page) */
   body:has(.print-only) * {
     visibility: hidden;
@@ -1225,14 +1230,14 @@ tr:hover td {
     position: absolute;
     left: 0;
     top: 0;
-    width: 280px;
+    width: 300px; /* Standard 80mm thermal width */
     margin: 0;
-    padding: 0;
+    padding: 0 4px; /* Tiny padding so text doesn't touch the exact edge */
     font-family: 'MerchantCopy', monospace, sans-serif;
     color: #000;
   }
   body:has(.print-only) .print-only h2 { text-align: center; margin-bottom: 10px; font-size: 20px; }
-  body:has(.print-only) .print-only hr { border-top: 1px dashed #000; margin: 8px 0; }
+  body:has(.print-only) .print-only hr { border-top: 1px solid #000; margin: 8px 0; }
   body:has(.print-only) .print-only table { width: 100%; font-size: 14px; }
   body:has(.print-only) .print-only th, 
   body:has(.print-only) .print-only td { text-align: left; padding: 2px 0; background: transparent; border: none; color: #000; }

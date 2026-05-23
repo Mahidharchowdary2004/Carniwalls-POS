@@ -14,6 +14,7 @@ import Customers from './pages/Customers'
 import Settings from './pages/Settings'
 import LiveMonitor from './pages/LiveMonitor'
 import SalesSummary from './pages/SalesSummary'
+import BillsHistory from './pages/BillsHistory'
 
 import { useStore } from './store'
 
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="inventory"     element={<Inventory />} />
           <Route path="reports"       element={<Reports />} />
           <Route path="sales-summary" element={<SalesSummary />} />
+          <Route path="bills"         element={<BillsHistory />} />
           <Route path="menu"          element={<MenuBuilder />} />
           <Route path="staff"         element={<Staff />} />
           <Route path="customers"     element={<Customers />} />

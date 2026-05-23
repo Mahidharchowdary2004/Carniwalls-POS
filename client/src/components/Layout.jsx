@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store'
 import toast from 'react-hot-toast'
@@ -11,6 +11,7 @@ const nav = [
   { section: 'Management' },
   { to: '/reports',       icon: '📊', label: 'Reports' },
   { to: '/sales-summary', icon: '📈', label: 'Sales Summary' },
+  { to: '/bills',         icon: '🧾', label: 'Bills History' },
   { to: '/menu',          icon: '🍽️', label: 'Menu Builder' },
   { to: '/live-monitor',  icon: '📡', label: 'Live Monitor' },
   { section: 'People' },
@@ -22,10 +23,11 @@ const nav = [
 
 const pageMeta = {
   '/dashboard':     { title: 'Dashboard',          sub: 'Overview & analytics' },
-  '/pos':           { title: 'POS Billing',         sub: 'Table management & order taking' },
+  '/pos':           { title: '',         sub: '' },
   '/online-orders': { title: 'Online Orders',       sub: 'Swiggy • Zomato • Direct orders' },
   '/reports':       { title: 'Reports & Analytics', sub: 'Sales, GST & performance data' },
   '/sales-summary': { title: 'Daily Sales Summary', sub: 'Sales performance day by day' },
+  '/bills':         { title: 'Bills History',       sub: 'All past generated bills' },
   '/menu':          { title: 'Menu Builder',        sub: 'Items, categories & pricing' },
   '/staff':         { title: 'Staff Management',    sub: 'Employees, shifts & roles' },
   '/customers':     { title: 'Customers',           sub: 'CRM & loyalty program' },
@@ -34,11 +36,60 @@ const pageMeta = {
 }
 
 export default function Layout() {
-  const { user, logout, activeOrders, onlineOrders, sidebarOpen, toggleSidebar } = useStore()
+  const { user, logout, activeOrders, onlineOrders, sidebarOpen, toggleSidebar, setPosState, fetchBills } = useStore()
   const navigate  = useNavigate()
   const location  = useLocation()
   const meta      = pageMeta[location.pathname] || { title: 'RestauraQ', sub: '' }
   const pendingOnline = onlineOrders.filter(o => o.status === 'new').length
+
+  const [searchBillNo, setSearchBillNo] = useState('')
+
+  async function handleBillSearch(e) {
+    e.preventDefault();
+    if (!searchBillNo) return;
+    try {
+      const bills = await fetchBills({ limit: 500 });
+      const bill = bills.find(b => String(b.bill_no) === String(searchBillNo));
+      if (bill) {
+        let parsedItems = bill.items || [];
+        if (typeof parsedItems === 'string') {
+          try { parsedItems = JSON.parse(parsedItems) } catch (err) { parsedItems = [] }
+        }
+        setPosState({
+          editingBillId: bill.id,
+          editingBillNo: bill.bill_no || bill.id.slice(-6).toUpperCase(),
+          cart: parsedItems,
+          originalCart: parsedItems,
+          discount: bill.discount || 0,
+          discountType: 'amt',
+          orderType: bill.order_type || 'takeaway',
+          customerName: bill.customer_name || '',
+          selectedTable: null,
+          activeOrderId: bill.order_id || null
+        });
+        setSearchBillNo('');
+        if (location.pathname !== '/pos') navigate('/pos');
+      } else {
+        toast.error('Bill not found');
+      }
+    } catch (err) {
+      toast.error('Error fetching bill');
+    }
+  }
+
+  function handleNewOrder() {
+    setPosState({
+      editingBillId: null,
+      editingBillNo: null,
+      cart: [],
+      originalCart: [],
+      discount: 0,
+      activeOrderId: null,
+      selectedTable: null,
+      customerName: ''
+    });
+    if (location.pathname !== '/pos') navigate('/pos');
+  }
 
   // POS and Kitchen pages get full height with no extra padding
   const isFullPage = ['/pos'].includes(location.pathname)
@@ -100,9 +151,30 @@ export default function Layout() {
         {/* TOPBAR */}
         <div className="topbar">
           <button className="sidebar-toggle" onClick={toggleSidebar}>☰</button>
-          <div style={{ marginLeft: 10 }}>
-            <div className="topbar-title">{meta.title}</div>
-            <div className="topbar-sub">{meta.sub}</div>
+          
+          <img src="./logo.png" alt="Logo" style={{ height: 34, marginLeft: 12, objectFit: 'contain', borderRadius: 4 }} />
+          
+          <div style={{ marginLeft: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button className="btn" onClick={handleNewOrder} style={{ fontSize: 13, height: 34, padding: '0 14px', background: '#27ae60', color: '#fff', border: 'none', fontWeight: 700, borderRadius: 6, cursor: 'pointer' }}>
+              + New Order
+            </button>
+            <form onSubmit={handleBillSearch} style={{ display: 'flex', alignItems: 'center' }}>
+              <input 
+                type="number" 
+                placeholder="Bill No." 
+                value={searchBillNo}
+                onChange={e => setSearchBillNo(e.target.value)}
+                style={{ height: 34, width: 90, padding: '0 10px', border: '1px solid var(--border)', borderRadius: '6px 0 0 6px', fontSize: 13, outline: 'none' }} 
+              />
+              <button type="submit" style={{ height: 34, padding: '0 12px', background: '#2980b9', color: '#fff', border: 'none', borderRadius: '0 6px 6px 0', fontSize: 13, cursor: 'pointer', fontWeight: 700 }}>
+                Find
+              </button>
+            </form>
+          </div>
+
+          <div style={{ marginLeft: 16 }}>
+            {meta.title && <div className="topbar-title">{meta.title}</div>}
+            {meta.sub && <div className="topbar-sub">{meta.sub}</div>}
           </div>
           <div className="spacer" />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

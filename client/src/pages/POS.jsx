@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useStore } from '../store'
+import { useStore, api } from '../store'
 import toast from 'react-hot-toast'
 
 const ORDER_TYPES = [
@@ -13,7 +13,11 @@ export default function POS() {
     fetchTables, fetchMenu, fetchOrders,
     createOrder, updateOrder, generateBill, posState, setPosState } = useStore()
 
-  const { orderType, selectedTable, activeOrderId, cart, customerName, discount, discountType } = posState
+  const { orderType, selectedTable, activeOrderId, cart, originalCart, customerName, discount, discountType, editingBillId, editingBillNo } = posState
+
+  const cartChanged = React.useMemo(() => {
+    return JSON.stringify(cart) !== JSON.stringify(originalCart || [])
+  }, [cart, originalCart])
 
   const [activeCat, setActiveCat] = useState('all')
   const [search, setSearch] = useState('')
@@ -37,11 +41,31 @@ export default function POS() {
 
   useEffect(() => { fetchTables(); fetchMenu(); fetchOrders() }, [])
 
-  // When switching to takeaway/delivery, skip table selection
+  // When switching to takeaway/delivery, skip table selection, or if editing a bill
   useEffect(() => {
-    if (orderType !== 'dine-in') { setPosState({ selectedTable: null }); setStep('items') }
-    else { setStep('tables') }
-  }, [orderType])
+    if (editingBillId) {
+      setStep('items')
+    } else if (orderType !== 'dine-in') {
+      setPosState({ selectedTable: null })
+      setStep('items')
+    } else {
+      setStep('tables')
+    }
+  }, [orderType, editingBillId])
+
+  // Print reply listener
+  useEffect(() => {
+    if (window.ipcRenderer) {
+      const handlePrintReply = (event, data) => {
+        if (data.success) {
+          toast.success('🖨️ Printing started')
+        } else {
+          toast.error(`🖨️ Print Failed: ${data.failureReason || 'Printer offline'}`)
+        }
+      }
+      window.ipcRenderer.on('print-reply', handlePrintReply)
+    }
+  }, [])
 
   // Reset split state when opening modal
   useEffect(() => {
@@ -62,12 +86,12 @@ export default function POS() {
   // Auto-save cart to database
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (cart.length > 0 && selectedTable) {
+      if (cart.length > 0 && selectedTable && !editingBillId) {
         syncOrder();
       }
     }, 1000); // Debounce save
     return () => clearTimeout(timer);
-  }, [cart, customerName]);
+  }, [cart, customerName, editingBillId]);
 
   async function syncOrder() {
     try {
@@ -171,8 +195,12 @@ export default function POS() {
       toast.success('KOT Sent to Kitchen', { icon: '👨‍🍳' })
       setPrintMode('kot')
       setTimeout(() => {
-        if (window.ipcRenderer) window.ipcRenderer.send('print-silent')
-        else window.print()
+        if (window.ipcRenderer) {
+          const printerName = localStorage.getItem('pos_printer') || ''
+          window.ipcRenderer.send('print-silent', { printerName })
+        } else {
+          window.print()
+        }
       }, 100);
     } catch (e) { toast.error('KOT Failed') }
     finally { setSaving(false) }
@@ -183,6 +211,33 @@ export default function POS() {
     if (!cart.length) return toast.error('Add items first')
     setSaving(true)
     try {
+      if (editingBillId) {
+        const payload = {
+          items: cart,
+          discount: discountAmt,
+          payment_method: splitPay ? splitAmts : { method: payMethod, amount: total }
+        }
+        await api.put(`/bills/${editingBillId}`, payload)
+        toast.success(`✅ Bill Updated`)
+        
+        setShowPay(false);
+        setLastBill({ bill_no: editingBillNo });
+        setPrintMode('bill')
+        setTimeout(() => {
+          if (window.ipcRenderer) {
+            const printerName = localStorage.getItem('pos_printer') || ''
+            window.ipcRenderer.send('print-silent', { printerName })
+          } else {
+            window.print()
+          }
+          setPosState({ cart: [], originalCart: [], activeOrderId: null, selectedTable: null, discount: 0, discountType: 'amt', customerName: '', editingBillId: null, editingBillNo: null })
+          setStep(orderType === 'dine-in' ? 'tables' : 'items')
+          fetchTables()
+        }, 300);
+        setSaving(false);
+        return;
+      }
+
       let orderId = activeOrderId
       if (!orderId) {
         const payload = {
@@ -201,14 +256,37 @@ export default function POS() {
       setLastBill(bill);
       toast.success(`✅ Bill ₹${bill.total} — ${payMethod.toUpperCase()}`)
       
-      setPrintMode('bill')
-      setTimeout(() => {
-        if (window.ipcRenderer) window.ipcRenderer.send('print-silent')
-        else window.print()
-        setPosState({ cart: [], activeOrderId: null, selectedTable: null, discount: 0, discountType: 'amt', customerName: '' })
-        setStep(orderType === 'dine-in' ? 'tables' : 'items')
-        fetchTables()
-      }, 300);
+      const needsKOT = !activeOrderId || !(activeOrders.find(o => o.id === activeOrderId)?.kot_printed);
+
+      const printFinalBill = () => {
+        setPrintMode('bill')
+        setTimeout(() => {
+          if (window.ipcRenderer) {
+            const printerName = localStorage.getItem('pos_printer') || ''
+            window.ipcRenderer.send('print-silent', { printerName })
+          } else {
+            window.print()
+          }
+          setPosState({ cart: [], originalCart: [], activeOrderId: null, selectedTable: null, discount: 0, discountType: 'amt', customerName: '', editingBillId: null, editingBillNo: null })
+          setStep(orderType === 'dine-in' ? 'tables' : 'items')
+          fetchTables()
+        }, 300);
+      };
+
+      if (needsKOT && !editingBillId) {
+        setPrintMode('kot')
+        setTimeout(() => {
+          if (window.ipcRenderer) {
+            const printerName = localStorage.getItem('pos_printer') || ''
+            window.ipcRenderer.send('print-silent', { printerName })
+          } else {
+            window.print()
+          }
+          setTimeout(printFinalBill, 500);
+        }, 300);
+      } else {
+        printFinalBill();
+      }
     } catch (err) { toast.error('Billing failed') }
     finally { setSaving(false) }
   }
@@ -226,19 +304,14 @@ export default function POS() {
 
       {/* ── ORDER TYPE BAR (Petpooja style) ── */}
       <div className="pos-topbar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px', borderRight: '1px solid var(--border)', height: '100%' }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mode</span>
+        {editingBillId && (
+          <div style={{ background: '#f39c12', color: '#fff', padding: '0 14px', display: 'flex', alignItems: 'center', fontWeight: 'bold', fontSize: 14 }}>
+            Editing Bill #{editingBillNo}
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px', height: '100%', width: 400 }}>
+          <input className="form-input" placeholder="🔍 Search menu item..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: '100%', height: 40, padding: '0 14px', fontSize: 14, borderRadius: 20 }} />
         </div>
-        {ORDER_TYPES.map(t => (
-          <button
-            key={t.key}
-            className={`pos-type-btn ${orderType === t.key ? `active-${t.cls}` : ''}`}
-            style={{ opacity: orderType === t.key ? 1 : 0.38 }}
-            onClick={() => setPosState({ orderType: t.key })}
-          >
-            {t.icon} {t.label}
-          </button>
-        ))}
         {/* Spacer */}
         <div style={{ flex: 1 }} />
         {selectedTable && (
@@ -403,9 +476,23 @@ export default function POS() {
         {/* ═══════════ RIGHT PANEL — ORDER CART (Petpooja style) ═══════════ */}
         {step === 'items' && (
           <div style={{ width: 420, background: '#fff', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-            {/* Search Bar in Cart */}
-            <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', background: '#f8f9fb' }}>
-              <input className="form-input" placeholder="🔍 Search menu item..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: '100%', height: 40, padding: '0 14px', fontSize: 14, borderRadius: 20 }} />
+            {/* Order Modes in Cart */}
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: '#f8f9fb', height: 64 }}>
+              <div style={{ display: 'flex', flex: 1 }}>
+                {ORDER_TYPES.map(t => (
+                  <button
+                    key={t.key}
+                    className={`pos-type-btn ${orderType === t.key ? `active-${t.cls}` : ''}`}
+                    style={{ opacity: orderType === t.key ? 1 : 0.38, flex: 1 }}
+                    onClick={() => setPosState({ orderType: t.key })}
+                  >
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                      <span>{t.icon}</span>
+                      <span style={{ fontSize: 10 }}>{t.label}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Column headers — like Petpooja */}
@@ -474,12 +561,36 @@ export default function POS() {
 
 
               {/* Action buttons — KOT & Bill */}
-              <div style={{ display: 'grid', gridTemplateColumns: (activeOrders.find(o => o.id === activeOrderId)?.kot_printed) ? '1fr' : '1fr 1fr', gap: 8 }}>
-                <button className="bill-btn" onClick={() => { if (!cart.length) { toast.error('No items'); return; } setShowPay(true) }}
-                  style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                  💳 Pay & Bill
-                </button>
-                {!(activeOrders.find(o => o.id === activeOrderId)?.kot_printed) && (
+              <div style={{ display: 'grid', gridTemplateColumns: (activeOrders.find(o => o.id === activeOrderId)?.kot_printed || editingBillId) ? '1fr' : '1fr 1fr', gap: 8 }}>
+                {editingBillId ? (
+                  cartChanged ? (
+                    <button className="bill-btn" onClick={() => { if (!cart.length) { toast.error('No items'); return; } setShowPay(true) }}
+                      style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                      💳 Settle & Save Edit
+                    </button>
+                  ) : (
+                    <button className="btn" onClick={() => {
+                      setLastBill({ bill_no: editingBillNo });
+                      setPrintMode('bill');
+                      setTimeout(() => {
+                        if (window.ipcRenderer) {
+                          const printerName = localStorage.getItem('pos_printer') || ''
+                          window.ipcRenderer.send('print-silent', { printerName })
+                        } else {
+                          window.print()
+                        }
+                      }, 100);
+                    }} style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#2980b9', color: '#fff', border: 'none' }}>
+                      🖨️ Reprint Bill
+                    </button>
+                  )
+                ) : (
+                  <button className="bill-btn" onClick={() => { if (!cart.length) { toast.error('No items'); return; } setShowPay(true) }}
+                    style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    💳 Pay & Bill
+                  </button>
+                )}
+                {!(activeOrders.find(o => o.id === activeOrderId)?.kot_printed) && !editingBillId && (
                   <button className="btn" onClick={printKOT} disabled={!cart.length || saving}
                     style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#2c3e50', color: '#fff', border: 'none' }}>
                     {saving ? <span className="spinner" style={{ width: 14, height: 14, borderTopColor: '#fff' }} /> : '👨‍🍳 Print KOT'}
@@ -487,10 +598,10 @@ export default function POS() {
                 )}
               </div>
 
-              {cart.length > 0 && (
-                <button onClick={() => setPosState({ cart: [], discount: 0, activeOrderId: null })}
-                  style={{ width: '100%', marginTop: 6, padding: '6px', background: 'none', border: '1px solid #fca5a5', color: '#c0392b', borderRadius: 'var(--radius)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
-                  Clear Order
+              {(cart.length > 0 || editingBillId) && (
+                <button onClick={() => setPosState({ cart: [], originalCart: [], discount: 0, activeOrderId: null, editingBillId: null, editingBillNo: null })}
+                  style={{ width: '100%', marginTop: 6, padding: '6px', background: 'none', border: '1px solid #95a5a6', color: '#7f8c8d', borderRadius: 'var(--radius)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                  Close
                 </button>
               )}
             </div>
@@ -630,24 +741,24 @@ export default function POS() {
       <div className="print-only receipt-content">
         {printMode === 'kot' ? (
           <>
-            <div style={{ textAlign: 'center', marginBottom: 4 }}>
+            <div style={{ textAlign: 'center', marginBottom: 4, fontSize: '16px', fontWeight: 'bold' }}>
               <div>{new Date().toLocaleDateString('en-GB', { year: '2-digit', month: '2-digit', day: '2-digit' })} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
               <div>KOT - {displayTokenNo}</div>
               <div>{orderType === 'dine-in' ? 'dine in' : orderType}</div>
-              <div><strong>Table No: {selectedTable?.number || 'N/A'}</strong></div>
+              <div>Table No: {selectedTable?.number || 'N/A'}</div>
             </div>
-            <div style={{ borderTop: '1px dashed #000', margin: '4px 0' }} />
-            <table style={{ width: '100%', fontSize: '14px' }}>
+            <div style={{ borderTop: '2px solid #000', margin: '4px 0' }} />
+            <table style={{ width: '100%', fontSize: '16px', fontWeight: 'bold' }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left', fontWeight: 'normal', padding: '2px 0' }}>Item</th>
-                  <th style={{ textAlign: 'right', fontWeight: 'normal', padding: '2px 0' }}>Qty.</th>
+                  <th style={{ textAlign: 'left', padding: '2px 0' }}>Item</th>
+                  <th style={{ textAlign: 'right', padding: '2px 0' }}>Qty.</th>
                 </tr>
               </thead>
               <tbody>
                 {cart.map((item, idx) => (
                   <tr key={idx}>
-                    <td style={{ textAlign: 'left', paddingRight: '10px', padding: '2px 0', fontWeight: 'bold' }}>{item.name}</td>
+                    <td style={{ textAlign: 'left', paddingRight: '10px', padding: '2px 0' }}>{item.name}</td>
                     <td style={{ textAlign: 'right', padding: '2px 0' }}>{item.qty}</td>
                   </tr>
                 ))}
@@ -656,10 +767,10 @@ export default function POS() {
           </>
         ) : (
           <>
-            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '16px', marginTop: '10px' }}>
+            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '20px', marginTop: '10px' }}>
               BABA DAIRY MILK PRODUCTS
             </div>
-            <div style={{ textAlign: 'center', fontSize: '13px', margin: '4px 0' }}>
+            <div style={{ textAlign: 'center', fontSize: '15px', fontWeight: 'bold', margin: '4px 0' }}>
               D.No. 2-13-80, Servey No. 411-A,<br />
               411-B, 2nd Ward<br />
               East Side of National Highway Road,<br />
@@ -667,33 +778,33 @@ export default function POS() {
               Sri Potti Sriramulu Nellore, Andhra<br />
               Pradesh -524137
             </div>
-            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-            <div style={{ fontSize: '14px', margin: '2px 0' }}>
+            <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
+            <div style={{ fontSize: '16px', fontWeight: 'bold', margin: '2px 0' }}>
               Name: {customerName || ''}
             </div>
-            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+            <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 'bold' }}>
               <span>Date: {new Date().toLocaleDateString('en-GB', { year: '2-digit', month: '2-digit', day: '2-digit' })}</span>
-              <span><strong>dine in: {selectedTable?.number || ''}</strong></span>
+              <span>dine in: {selectedTable?.number || ''}</span>
             </div>
-            <div style={{ fontSize: '14px' }}>
+            <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
               {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 'bold' }}>
               <span>Cashier: biller</span>
               <span>Bill No.: {displayBillNo}</span>
             </div>
-            <div style={{ fontSize: '14px', fontWeight: 'bold' }}>
+            <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
               Token No.: {displayTokenNo}
             </div>
-            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-            <table style={{ width: '100%', fontSize: '14px' }}>
+            <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
+            <table style={{ width: '100%', fontSize: '16px', fontWeight: 'bold' }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left', fontWeight: 'normal', padding: '2px 0' }}>Item</th>
-                  <th style={{ textAlign: 'center', fontWeight: 'normal', padding: '2px 0' }}>Qty.</th>
-                  <th style={{ textAlign: 'right', fontWeight: 'normal', padding: '2px 0' }}>Price</th>
-                  <th style={{ textAlign: 'right', fontWeight: 'normal', padding: '2px 0' }}>Amount</th>
+                  <th style={{ textAlign: 'left', padding: '2px 0' }}>Item</th>
+                  <th style={{ textAlign: 'center', padding: '2px 0' }}>Qty.</th>
+                  <th style={{ textAlign: 'right', padding: '2px 0' }}>Price</th>
+                  <th style={{ textAlign: 'right', padding: '2px 0' }}>Amount</th>
                 </tr>
               </thead>
               <tbody>
@@ -707,20 +818,20 @@ export default function POS() {
                 ))}
               </tbody>
             </table>
-            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+            <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 'bold' }}>
               <span>Total Qty: {cart.reduce((sum, i) => sum + i.qty, 0)}</span>
               <span>Sub Total &nbsp;&nbsp; {subtotal.toFixed(2)}</span>
             </div>
-            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-            <div style={{ textAlign: 'right', fontSize: '16px', fontWeight: 'bold', margin: '4px 0' }}>
+            <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
+            <div style={{ textAlign: 'right', fontSize: '18px', fontWeight: 'bold', margin: '4px 0' }}>
               Grand Total &nbsp; ₹ {total.toFixed(2)}
             </div>
-            <div style={{ fontSize: '12px', margin: '2px 0' }}>
+            <div style={{ fontSize: '14px', fontWeight: 'bold', margin: '2px 0' }}>
               Paid via {splitPay ? 'Split' : 'Other'} [{payMethod.toUpperCase()}]
             </div>
-            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-            <div style={{ textAlign: 'center', fontSize: '14px', marginTop: '6px' }}>
+            <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
+            <div style={{ textAlign: 'center', fontSize: '16px', fontWeight: 'bold', marginTop: '6px' }}>
               Thank You | Please Visit Again
             </div>
           </>

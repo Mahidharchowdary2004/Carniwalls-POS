@@ -93,19 +93,21 @@ app.get('/api/dashboard/stats', auth, async (req, res) => {
   try {
     const { period = 'today', from, to } = req.query;
 
-    let currentFilter = "created_at::date = CURRENT_DATE";
-    let previousFilter = "created_at::date = CURRENT_DATE - 1";
+    let currentFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date";
+
+    let previousFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 1";
     let params = [req.user.outlet_id];
     let pIdx = 2;
 
     if (period === 'yesterday') {
-      currentFilter = "created_at::date = CURRENT_DATE - 1";
-      previousFilter = "created_at::date = CURRENT_DATE - 2";
+      currentFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 1";
+      previousFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 2";
+
     } else if (period === 'month') {
       currentFilter = "created_at >= CURRENT_DATE - INTERVAL '30 days'";
       previousFilter = "created_at >= CURRENT_DATE - INTERVAL '60 days' AND created_at < CURRENT_DATE - INTERVAL '30 days'";
     } else if (period === 'custom' && from && to) {
-      currentFilter = `created_at >= $${pIdx} AND created_at <= $${pIdx+1}`;
+      currentFilter = `created_at >= $${pIdx} AND created_at <= $${pIdx + 1}`;
       previousFilter = `1=0`; // Simplify by skipping change calc for custom dates
       params.push(from, to + ' 23:59:59');
       pIdx += 2;
@@ -156,16 +158,17 @@ app.get('/api/dashboard/stats', auth, async (req, res) => {
 app.get('/api/dashboard/recent-orders', auth, async (req, res) => {
   try {
     const { period = 'today', from, to } = req.query;
-    let currentFilter = "created_at::date = CURRENT_DATE";
+    let currentFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date";
     let params = [req.user.outlet_id];
     let pIdx = 2;
 
     if (period === 'yesterday') {
-      currentFilter = "created_at::date = CURRENT_DATE - 1";
+      currentFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 1";
+
     } else if (period === 'month') {
       currentFilter = "created_at >= CURRENT_DATE - INTERVAL '30 days'";
     } else if (period === 'custom' && from && to) {
-      currentFilter = `created_at >= $${pIdx} AND created_at <= $${pIdx+1}`;
+      currentFilter = `created_at >= $${pIdx} AND created_at <= $${pIdx + 1}`;
       params.push(from, to + ' 23:59:59');
     }
 
@@ -345,9 +348,12 @@ app.post('/api/orders', auth, async (req, res) => {
     const subtotal = items.reduce((s, i) => s + (i.price * i.qty), 0);
 
     const id = `ord_${Date.now()}`;
-    
+
     // Get daily token number
-    const tRes = await db.query('SELECT COALESCE(MAX(token_no), 0) as max_token FROM orders WHERE outlet_id = $1 AND created_at::date = CURRENT_DATE', [req.user.outlet_id]);
+    const tRes = await db.query(
+      "SELECT COALESCE(MAX(token_no), 0) as max_token FROM orders WHERE outlet_id = $1 AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date",
+      [req.user.outlet_id]
+    );
     const token_no = parseInt(tRes.rows[0].max_token) + 1;
 
     const { rows } = await db.query(`
@@ -450,11 +456,13 @@ app.post('/api/bills', auth, async (req, res) => {
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
     const billId = `bill_${Date.now()}`;
-    
-    // Get daily bill number
-    const bRes = await db.query('SELECT COALESCE(MAX(bill_no), 0) as max_bill FROM bills WHERE outlet_id = $1 AND created_at::date = CURRENT_DATE', [req.user.outlet_id]);
-    const bill_no = parseInt(bRes.rows[0].max_bill) + 1;
 
+    // Get daily bill number
+    const bRes = await db.query(
+      "SELECT COALESCE(MAX(bill_no), 0) as max_bill FROM bills WHERE outlet_id = $1 AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date",
+      [req.user.outlet_id]
+    );
+    const bill_no = parseInt(bRes.rows[0].max_bill) + 1;
     const { rows } = await db.query(`
       INSERT INTO bills (id, order_id, table_id, order_type, items, subtotal, cgst, sgst, discount, total, payment_method, status, outlet_id, bill_no)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'paid', $12, $13) RETURNING *
@@ -470,6 +478,7 @@ app.post('/api/bills', auth, async (req, res) => {
 
 app.get('/api/bills', auth, async (req, res) => {
   try {
+    console.log('GET /api/bills query:', req.query);
     const { date, from, to, limit = 50 } = req.query;
     let sql = 'SELECT * FROM bills WHERE outlet_id = $1';
     const params = [req.user.outlet_id];
@@ -479,9 +488,30 @@ app.get('/api/bills', auth, async (req, res) => {
     if (to) { sql += ` AND created_at <= $${pIdx++}`; params.push(to); }
     sql += ` ORDER BY created_at DESC LIMIT $${pIdx}`;
     params.push(limit);
+    console.log('SQL:', sql, params);
     const { rows } = await db.query(sql, params);
     res.json(rows);
-  } catch (err) { console.error('GET /api/orders error:', err); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('GET /api/bills error:', err); res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/bills/:id', auth, async (req, res) => {
+  try {
+    const { items, discount, payment_method } = req.body;
+    let subtotal = 0;
+    if (items && items.length) {
+      subtotal = items.reduce((s, i) => s + (parseFloat(i.price) * parseFloat(i.qty)), 0);
+    }
+    const finalDiscount = parseFloat(discount) || 0;
+    const total = subtotal - finalDiscount;
+
+    const { rows } = await db.query(
+      'UPDATE bills SET items = $1, subtotal = $2, discount = $3, total = $4, payment_method = $5 WHERE id = $6 AND outlet_id = $7 RETURNING *',
+      [JSON.stringify(items || []), subtotal, finalDiscount, total, payment_method, req.params.id, req.user.outlet_id]
+    );
+
+    if (!rows[0]) return res.status(404).json({ error: 'Bill not found' });
+    res.json(rows[0]);
+  } catch (err) { console.error('PUT /api/bills error:', err); res.status(500).json({ error: err.message }); }
 });
 
 // ─── ONLINE ORDERS ────────────────────────────────────────────────────────────
@@ -584,7 +614,7 @@ app.get('/api/reports/sales', auth, async (req, res) => {
     const params = [req.user.outlet_id];
     let pIdx = 2;
 
-    if (period === 'today') { sql += ` AND created_at::date = CURRENT_DATE`; }
+    if (period === 'today') { sql += ` AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date`; }
     else if (period === 'week') { sql += ` AND created_at >= CURRENT_DATE - INTERVAL '7 days'`; }
     else if (period === 'month') { sql += ` AND created_at >= date_trunc('month', CURRENT_DATE)`; }
 
@@ -635,7 +665,7 @@ app.get('/api/reports/daily', auth, async (req, res) => {
       dateFilter = `AND created_at >= $${pIdx++} AND created_at <= $${pIdx++}`;
       params.push(from, to + ' 23:59:59');
     }
-    
+
     const { rows } = await db.query(`
       SELECT 
         TO_CHAR(created_at, 'YYYY-MM-DD') as date, 
@@ -685,18 +715,19 @@ app.get('/api/dashboard/order-summary', auth, async (req, res) => {
   try {
     const { period = 'today', from, to } = req.query;
 
-    let currentFilter = "created_at::date = CURRENT_DATE";
+    let currentFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date";
     let params = [req.user.outlet_id];
     let pIdx = 2;
     let isDaily = false;
 
     if (period === 'yesterday') {
-      currentFilter = "created_at::date = CURRENT_DATE - 1";
+      currentFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 1";
+
     } else if (period === 'month') {
       currentFilter = "created_at >= CURRENT_DATE - INTERVAL '30 days'";
       isDaily = true;
     } else if (period === 'custom' && from && to) {
-      currentFilter = `created_at >= $${pIdx} AND created_at <= $${pIdx+1}`;
+      currentFilter = `created_at >= $${pIdx} AND created_at <= $${pIdx + 1}`;
       params.push(from, to + ' 23:59:59');
       isDaily = true;
     }
@@ -717,7 +748,7 @@ app.get('/api/dashboard/order-summary', auth, async (req, res) => {
         WHERE outlet_id = $1 AND ${currentFilter}
         GROUP BY 1 ORDER BY 1
       `, params);
-      hourly = rows.map(h => ({ hour: h.day, label: new Date(h.day).toLocaleDateString('en-IN', {month:'short', day:'numeric'}), count: parseInt(h.count), revenue: parseFloat(h.revenue) }));
+      hourly = rows.map(h => ({ hour: h.day, label: new Date(h.day).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }), count: parseInt(h.count), revenue: parseFloat(h.revenue) }));
     } else {
       const { rows } = await db.query(`
         SELECT EXTRACT(HOUR FROM created_at) as hour, count(*) as count, SUM(total) as revenue
@@ -792,41 +823,41 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   server.listen(PORT, async () => {
     console.log(`🍽️  RestauraQ Server running on port ${PORT}`);
 
-  // Auto-migration on startup
-  try {
-    console.log('🔄 Verifying Database Schema...');
+    // Auto-migration on startup
+    try {
+      console.log('🔄 Verifying Database Schema...');
 
-    // Create Outlets
-    await db.query(`CREATE TABLE IF NOT EXISTS outlets (
+      // Create Outlets
+      await db.query(`CREATE TABLE IF NOT EXISTS outlets (
       id VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL, gst_number VARCHAR(50), 
       phone VARCHAR(20), address TEXT, email VARCHAR(100), cgst DECIMAL(5,2) DEFAULT 2.5, 
       sgst DECIMAL(5,2) DEFAULT 2.5, printer_settings JSONB DEFAULT '{}', invoice_footer TEXT, 
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-    // Create Users
-    await db.query(`CREATE TABLE IF NOT EXISTS users (
+      // Create Users
+      await db.query(`CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(100) UNIQUE, 
       phone VARCHAR(20) UNIQUE, password VARCHAR(255) NOT NULL, role VARCHAR(20) DEFAULT 'cashier', 
       outlet_id VARCHAR(50) REFERENCES outlets(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-    // Add phone column if missing (for cases where users existed)
-    await db.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT');
+      // Add phone column if missing (for cases where users existed)
+      await db.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT');
 
-    // Create Tables
-    await db.query(`CREATE TABLE IF NOT EXISTS tables (
+      // Create Tables
+      await db.query(`CREATE TABLE IF NOT EXISTS tables (
       id VARCHAR(50) PRIMARY KEY, number VARCHAR(20) NOT NULL, status VARCHAR(20) DEFAULT 'free', 
       section VARCHAR(50), capacity INTEGER DEFAULT 4, x INTEGER DEFAULT 0, y INTEGER DEFAULT 0, 
       width INTEGER DEFAULT 100, height INTEGER DEFAULT 100, shape VARCHAR(20) DEFAULT 'square', 
       outlet_id VARCHAR(50) REFERENCES outlets(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-    // Create Categories
-    await db.query(`CREATE TABLE IF NOT EXISTS categories (
+      // Create Categories
+      await db.query(`CREATE TABLE IF NOT EXISTS categories (
       id VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL, icon VARCHAR(20), 
       sort_order INTEGER DEFAULT 0, outlet_id VARCHAR(50) REFERENCES outlets(id), 
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-    // Create Menu Items
-    await db.query(`CREATE TABLE IF NOT EXISTS menu_items (
+      // Create Menu Items
+      await db.query(`CREATE TABLE IF NOT EXISTS menu_items (
       id VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL, price DECIMAL(10,2) NOT NULL, 
       cost DECIMAL(10,2), type VARCHAR(20) DEFAULT 'veg', description TEXT, emoji VARCHAR(20), 
       active BOOLEAN DEFAULT TRUE, gst_percent DECIMAL(5,2) DEFAULT 5, 
@@ -835,8 +866,8 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
       stock DECIMAL(10,2) DEFAULT 0, min_stock DECIMAL(10,2) DEFAULT 0,
       outlet_id VARCHAR(50) REFERENCES outlets(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-    // Create Orders
-    await db.query(`CREATE TABLE IF NOT EXISTS orders (
+      // Create Orders
+      await db.query(`CREATE TABLE IF NOT EXISTS orders (
       id VARCHAR(50) PRIMARY KEY, table_id VARCHAR(50) REFERENCES tables(id), 
       items JSONB DEFAULT '[]', subtotal DECIMAL(10,2) DEFAULT 0, 
       cgst DECIMAL(10,2) DEFAULT 0, sgst DECIMAL(10,2) DEFAULT 0, 
@@ -845,68 +876,68 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
       kot_printed BOOLEAN DEFAULT FALSE, outlet_id VARCHAR(50) REFERENCES outlets(id), 
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-    // Create Bills
-    await db.query(`CREATE TABLE IF NOT EXISTS bills (
+      // Create Bills
+      await db.query(`CREATE TABLE IF NOT EXISTS bills (
       id VARCHAR(50) PRIMARY KEY, order_id VARCHAR(50) REFERENCES orders(id), 
       subtotal DECIMAL(10,2) DEFAULT 0, cgst DECIMAL(10,2) DEFAULT 0, 
       sgst DECIMAL(10,2) DEFAULT 0, total DECIMAL(10,2) DEFAULT 0, 
       discount DECIMAL(10,2) DEFAULT 0, payment_method JSONB DEFAULT '{"method": "cash", "amount": 0}', 
       outlet_id VARCHAR(50) REFERENCES outlets(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-    // Create Inventory
-    await db.query(`CREATE TABLE IF NOT EXISTS inventory (
+      // Create Inventory
+      await db.query(`CREATE TABLE IF NOT EXISTS inventory (
       id VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL, stock DECIMAL(10,2) DEFAULT 0, 
       min_stock DECIMAL(10,2) DEFAULT 0, unit VARCHAR(20), price DECIMAL(10,2) DEFAULT 0,
       outlet_id VARCHAR(50) REFERENCES outlets(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-    // Ensure all columns exist (Migration safety)
-    await db.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE');
-    await db.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
-    await db.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0');
+      // Ensure all columns exist (Migration safety)
+      await db.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE');
+      await db.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
+      await db.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0');
 
-    await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE');
-    await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT \'veg\'');
-    await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS category_id VARCHAR(50)');
-    await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS emoji VARCHAR(20)');
-    await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS gst_percent DECIMAL(5,2) DEFAULT 5');
-    await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
-    await db.query('ALTER TABLE tables ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
-    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
-    await db.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
-    // Change payment_method type to JSONB if it was VARCHAR
-    try {
-      await db.query('ALTER TABLE bills ALTER COLUMN payment_method TYPE JSONB USING CASE WHEN payment_method LIKE \'{%\' THEN payment_method::jsonb ELSE jsonb_build_object(\'method\', payment_method, \'amount\', total) END');
-    } catch (e) { console.error('Could not alter payment_method:', e.message); }
-    
-    await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS stock DECIMAL(10,2) DEFAULT 0');
-    await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS min_stock DECIMAL(10,2) DEFAULT 0');
-    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS kot_printed BOOLEAN DEFAULT FALSE');
-    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS token_no INTEGER');
-    await db.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS bill_no INTEGER');
-    await db.query('ALTER TABLE inventory ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
-    await db.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
-    await db.query('ALTER TABLE staff ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
-    await db.query('ALTER TABLE customers ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
+      await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE');
+      await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT \'veg\'');
+      await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS category_id VARCHAR(50)');
+      await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS emoji VARCHAR(20)');
+      await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS gst_percent DECIMAL(5,2) DEFAULT 5');
+      await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
+      await db.query('ALTER TABLE tables ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
+      await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
+      await db.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
+      // Change payment_method type to JSONB if it was VARCHAR
+      try {
+        await db.query('ALTER TABLE bills ALTER COLUMN payment_method TYPE JSONB USING CASE WHEN payment_method LIKE \'{%\' THEN payment_method::jsonb ELSE jsonb_build_object(\'method\', payment_method, \'amount\', total) END');
+      } catch (e) { console.error('Could not alter payment_method:', e.message); }
 
-    // Backfill outlet_id for existing records
-    await db.query("UPDATE tables SET outlet_id = 'out_main' WHERE outlet_id IS NULL");
-    await db.query("UPDATE categories SET outlet_id = 'out_main' WHERE outlet_id IS NULL");
-    await db.query("UPDATE menu_items SET outlet_id = 'out_main' WHERE outlet_id IS NULL");
-    await db.query("UPDATE orders SET outlet_id = 'out_main' WHERE outlet_id IS NULL");
-    await db.query("UPDATE inventory SET outlet_id = 'out_main' WHERE outlet_id IS NULL");
+      await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS stock DECIMAL(10,2) DEFAULT 0');
+      await db.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS min_stock DECIMAL(10,2) DEFAULT 0');
+      await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS kot_printed BOOLEAN DEFAULT FALSE');
+      await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS token_no INTEGER');
+      await db.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS bill_no INTEGER');
+      await db.query('ALTER TABLE inventory ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
+      await db.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
+      await db.query('ALTER TABLE staff ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
+      await db.query('ALTER TABLE customers ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
 
-    // Seed Admin/Cashier
-    const adminPass = bcrypt.hashSync('123456', 10);
-    const cashierPass = bcrypt.hashSync('cash123', 10);
+      // Backfill outlet_id for existing records
+      await db.query("UPDATE tables SET outlet_id = 'out_main' WHERE outlet_id IS NULL");
+      await db.query("UPDATE categories SET outlet_id = 'out_main' WHERE outlet_id IS NULL");
+      await db.query("UPDATE menu_items SET outlet_id = 'out_main' WHERE outlet_id IS NULL");
+      await db.query("UPDATE orders SET outlet_id = 'out_main' WHERE outlet_id IS NULL");
+      await db.query("UPDATE inventory SET outlet_id = 'out_main' WHERE outlet_id IS NULL");
 
-    await db.query("INSERT INTO outlets (id, name) VALUES ('out_main', 'Main Outlet') ON CONFLICT DO NOTHING");
-    await db.query("INSERT INTO users (name, email, phone, password, role, outlet_id) VALUES ('Admin', 'admin@restauraq.com', '9876543210', $1, 'admin', 'out_main') ON CONFLICT (email) DO UPDATE SET phone = EXCLUDED.phone, password = EXCLUDED.password", [adminPass]);
-    await db.query("INSERT INTO users (name, email, phone, password, role, outlet_id) VALUES ('Cashier', 'cashier@restauraq.com', '8888888888', $1, 'cashier', 'out_main') ON CONFLICT (email) DO UPDATE SET phone = EXCLUDED.phone, password = EXCLUDED.password", [cashierPass]);
+      // Seed Admin/Cashier
+      const adminPass = bcrypt.hashSync('123456', 10);
+      const cashierPass = bcrypt.hashSync('cash123', 10);
 
-    console.log('✅ Database schema verified and seeded.');
-  } catch (err) {
-    console.error('⚠️ Startup migration failed:', err.message);
-  }
+      await db.query("INSERT INTO outlets (id, name) VALUES ('out_main', 'Main Outlet') ON CONFLICT DO NOTHING");
+      await db.query("INSERT INTO users (name, email, phone, password, role, outlet_id) VALUES ('Admin', 'admin@restauraq.com', '9876543210', $1, 'admin', 'out_main') ON CONFLICT (email) DO UPDATE SET phone = EXCLUDED.phone, password = EXCLUDED.password", [adminPass]);
+      await db.query("INSERT INTO users (name, email, phone, password, role, outlet_id) VALUES ('Cashier', 'cashier@restauraq.com', '8888888888', $1, 'cashier', 'out_main') ON CONFLICT (email) DO UPDATE SET phone = EXCLUDED.phone, password = EXCLUDED.password", [cashierPass]);
+
+      console.log('✅ Database schema verified and seeded.');
+    } catch (err) {
+      console.error('⚠️ Startup migration failed:', err.message);
+    }
   });
 }
 

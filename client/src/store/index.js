@@ -37,13 +37,17 @@ export const useStore = create((set, get) => ({
     selectedTable: null,
     activeOrderId: null,
     cart: [],
+    originalCart: [],
     customerName: '',
     discount: 0,
     discountType: 'amt', // 'amt' or 'pct'
-    orderType: 'dine-in'
+    orderType: 'dine-in',
+    editingBillId: null,
+    editingBillNo: null
   },
 
   setUser: (user) => {
+    +9
     set({ user });
     if (user && user.outlet_id) {
       socket.emit('join-outlet', user.outlet_id);

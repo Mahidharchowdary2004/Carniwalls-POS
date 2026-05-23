@@ -13,6 +13,10 @@ export default function Settings() {
   const [updateStatus, setUpdateStatus] = useState(null)
   const [updateProgress, setUpdateProgress] = useState(0)
 
+  // Hardware State
+  const [printers, setPrinters] = useState([])
+  const [selectedPrinter, setSelectedPrinter] = useState(localStorage.getItem('pos_printer') || '')
+
   useEffect(() => {
     api.get('/outlets/out_main').then(r => { 
       if (r.data) {
@@ -30,6 +34,7 @@ export default function Settings() {
 
     if (window.ipcRenderer) {
       window.ipcRenderer.invoke('get-version').then(v => setVersion(v))
+      window.ipcRenderer.invoke('get-printers').then(list => setPrinters(list || []))
 
       window.ipcRenderer.on('updater-status', (event, data) => {
         setUpdateStatus(data.status)
@@ -60,8 +65,16 @@ export default function Settings() {
   )
 
   const tabs = [
-    { key:'outlet', label:'🏪 Outlet' }
+    { key:'outlet', label:'🏪 Outlet' },
+    { key:'hardware', label:'🖨️ Hardware' }
   ]
+
+  function handlePrinterChange(e) {
+    const val = e.target.value
+    setSelectedPrinter(val)
+    localStorage.setItem('pos_printer', val)
+    toast.success('Printer saved successfully')
+  }
 
   return (
     <div>
@@ -163,6 +176,35 @@ export default function Settings() {
                    'Check for Updates'}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HARDWARE DETAILS */}
+      {activeTab === 'hardware' && (
+        <div className="grid-2" style={{ gap:20 }}>
+          <div className="card">
+            <div className="card-header"><div className="card-title">Thermal Printer</div></div>
+            <div className="card-body">
+              <div className="form-group">
+                <label className="form-label">Default POS Printer</label>
+                {window.ipcRenderer ? (
+                  <select className="form-select" value={selectedPrinter} onChange={handlePrinterChange}>
+                    <option value="">-- Select Printer --</option>
+                    {printers.map((p, i) => (
+                      <option key={i} value={p.name}>{p.displayName || p.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div style={{ color: 'var(--red)', fontSize: 13, background: '#fceaea', padding: 10, borderRadius: 6 }}>
+                    Hardware settings are only available in the Desktop App.
+                  </div>
+                )}
+                <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 8 }}>
+                  This printer will be used silently for bills and KOTs without showing a print dialog.
+                </div>
+              </div>
             </div>
           </div>
         </div>

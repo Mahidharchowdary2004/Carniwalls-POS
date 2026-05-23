@@ -90,10 +90,29 @@ app.on('activate', () => {
 // --- IPC Handlers for Auto Updater and Printing ---
 ipcMain.handle('get-version', () => app.getVersion())
 
-ipcMain.on('print-silent', (event) => {
+ipcMain.handle('get-printers', async (event) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (win) {
+      return await win.webContents.getPrintersAsync()
+    }
+    return []
+  } catch (err) {
+    console.error('Failed to get printers:', err)
+    return []
+  }
+})
+
+ipcMain.on('print-silent', (event, options = {}) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (win) {
-    win.webContents.print({ silent: true, printBackground: true }, (success, failureReason) => {
+    win.webContents.print({
+      silent: true,
+      printBackground: true,
+      deviceName: options.printerName || '', // Uses default if empty
+      margins: { marginType: 'none' } // Best practice for thermal printers
+    }, (success, failureReason) => {
+      event.sender.send('print-reply', { success, failureReason })
       if (!success) console.error('Silent Print Failed:', failureReason)
     })
   }
@@ -126,16 +145,4 @@ autoUpdater.on('update-downloaded', () => {
   win?.webContents.send('updater-status', { status: 'downloaded' })
 })
 
-// --- IPC Handlers for Printing ---
-ipcMain.on('print-silent', (event) => {
-  const win = BrowserWindow.fromWebContents(event.sender)
-  if (win) {
-    win.webContents.print({
-      silent: true,
-      printBackground: true,
-      deviceName: '' // Will use default printer
-    }, (success, failureReason) => {
-      if (!success) console.error('Print failed:', failureReason)
-    })
-  }
-})
+
