@@ -1205,13 +1205,22 @@ tr:hover td {
 .print-only { display: none; }
 
 @media print {
-  body * {
+  /* Hide sidebar and topbar when printing normal pages */
+  .sidebar, .topbar, .no-print {
+    display: none !important;
+  }
+  .main { margin: 0 !important; width: 100% !important; }
+  .content { padding: 0 !important; }
+
+  /* Receipt printing styles (only active when a .print-only element exists on the page) */
+  body:has(.print-only) * {
     visibility: hidden;
   }
-  .print-only, .print-only * {
+  body:has(.print-only) .print-only, 
+  body:has(.print-only) .print-only * {
     visibility: visible;
   }
-  .print-only {
+  body:has(.print-only) .print-only {
     display: block !important;
     position: absolute;
     left: 0;
@@ -1222,10 +1231,11 @@ tr:hover td {
     font-family: 'MerchantCopy', monospace, sans-serif;
     color: #000;
   }
-  .print-only h2 { text-align: center; margin-bottom: 10px; font-size: 20px; }
-  .print-only hr { border-top: 1px dashed #000; margin: 8px 0; }
-  .print-only table { width: 100%; font-size: 14px; }
-  .print-only th, .print-only td { text-align: left; padding: 2px 0; background: transparent; border: none; color: #000; }
-  .print-only .qty { text-align: center; }
-  .print-only .right { text-align: right; }
+  body:has(.print-only) .print-only h2 { text-align: center; margin-bottom: 10px; font-size: 20px; }
+  body:has(.print-only) .print-only hr { border-top: 1px dashed #000; margin: 8px 0; }
+  body:has(.print-only) .print-only table { width: 100%; font-size: 14px; }
+  body:has(.print-only) .print-only th, 
+  body:has(.print-only) .print-only td { text-align: left; padding: 2px 0; background: transparent; border: none; color: #000; }
+  body:has(.print-only) .print-only .qty { text-align: center; }
+  body:has(.print-only) .print-only .right { text-align: right; }
 }

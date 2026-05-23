@@ -170,7 +170,10 @@ export default function POS() {
       }
       toast.success('KOT Sent to Kitchen', { icon: '👨‍🍳' })
       setPrintMode('kot')
-      setTimeout(() => window.print(), 100);
+      setTimeout(() => {
+        if (window.ipcRenderer) window.ipcRenderer.send('print-silent')
+        else window.print()
+      }, 100);
     } catch (e) { toast.error('KOT Failed') }
     finally { setSaving(false) }
   }
@@ -200,7 +203,8 @@ export default function POS() {
       
       setPrintMode('bill')
       setTimeout(() => {
-        window.print();
+        if (window.ipcRenderer) window.ipcRenderer.send('print-silent')
+        else window.print()
         setPosState({ cart: [], activeOrderId: null, selectedTable: null, discount: 0, discountType: 'amt', customerName: '' })
         setStep(orderType === 'dine-in' ? 'tables' : 'items')
         fetchTables()

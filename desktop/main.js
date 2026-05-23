@@ -87,8 +87,17 @@ app.on('activate', () => {
   }
 })
 
-// --- IPC Handlers for Auto Updater ---
+// --- IPC Handlers for Auto Updater and Printing ---
 ipcMain.handle('get-version', () => app.getVersion())
+
+ipcMain.on('print-silent', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (win) {
+    win.webContents.print({ silent: true, printBackground: true }, (success, failureReason) => {
+      if (!success) console.error('Silent Print Failed:', failureReason)
+    })
+  }
+})
 
 ipcMain.on('check-for-updates', () => {
   autoUpdater.checkForUpdates()
@@ -115,4 +124,18 @@ autoUpdater.on('download-progress', (progressObj) => {
 })
 autoUpdater.on('update-downloaded', () => {
   win?.webContents.send('updater-status', { status: 'downloaded' })
+})
+
+// --- IPC Handlers for Printing ---
+ipcMain.on('print-silent', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (win) {
+    win.webContents.print({
+      silent: true,
+      printBackground: true,
+      deviceName: '' // Will use default printer
+    }, (success, failureReason) => {
+      if (!success) console.error('Print failed:', failureReason)
+    })
+  }
 })

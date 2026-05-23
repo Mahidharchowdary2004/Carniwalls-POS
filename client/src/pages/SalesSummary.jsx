@@ -27,6 +27,7 @@ export default function SalesSummary() {
 
   return (
     <div>
+      <div className="no-print">
       <div style={{ display: 'flex', gap: 8, marginBottom: 24, alignItems: 'center' }}>
         <div className="tab-bar" style={{ marginBottom: 0 }}>
           {['today','week','month','custom'].map(p => (
@@ -41,7 +42,7 @@ export default function SalesSummary() {
           </div>
         )}
         <div className="spacer" />
-        <button className="btn btn-sm" onClick={() => window.print()}>🖨️ Print</button>
+        <button className="btn btn-sm" onClick={() => { if (window.ipcRenderer) window.ipcRenderer.send('print-silent'); else window.print(); }}>🖨️ Print</button>
         <button className="btn btn-sm">📄 Export PDF</button>
         <button className="btn btn-sm">📊 Export Excel</button>
       </div>
@@ -89,6 +90,52 @@ export default function SalesSummary() {
         </div>
         </>
       )}
+      </div>
+
+      {/* THERMAL PRINTER SUMMARY FORMAT (Hidden on screen, visible only when printing) */}
+      <div className="print-only receipt-content">
+        <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '16px', marginTop: '10px' }}>
+          SALES SUMMARY
+        </div>
+        <div style={{ textAlign: 'center', fontSize: '14px', margin: '4px 0' }}>
+          Period: {period.toUpperCase()}
+          {period === 'custom' && ` (${fromDate} to ${toDate})`}
+        </div>
+        <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+          <span>Total Sales</span>
+          <span>₹{totalRevenue.toLocaleString()}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+          <span>Total Orders</span>
+          <span>{totalOrders.toLocaleString()}</span>
+        </div>
+        <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+        <table style={{ width: '100%', fontSize: '14px' }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left', fontWeight: 'normal', padding: '2px 0' }}>Date</th>
+              <th style={{ textAlign: 'center', fontWeight: 'normal', padding: '2px 0' }}>Ord</th>
+              <th style={{ textAlign: 'right', fontWeight: 'normal', padding: '2px 0' }}>Rev</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(daily || []).map(d => (
+              <tr key={d.date}>
+                <td style={{ textAlign: 'left', paddingRight: '2px', padding: '2px 0' }}>
+                  {new Date(d.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}
+                </td>
+                <td style={{ textAlign: 'center', padding: '2px 0' }}>{d.orders}</td>
+                <td style={{ textAlign: 'right', padding: '2px 0' }}>{Number(d.revenue).toFixed(0)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+        <div style={{ textAlign: 'center', fontSize: '12px', marginTop: '6px' }}>
+          Printed on {new Date().toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+        </div>
+      </div>
     </div>
   )
 }
