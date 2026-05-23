@@ -86,12 +86,12 @@ export default function POS() {
   // Auto-save cart to database
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (cart.length > 0 && selectedTable && !editingBillId) {
+      if (cart.length > 0 && selectedTable && !editingBillId && !saving) {
         syncOrder();
       }
-    }, 1000); // Debounce save
+    }, 1000);
     return () => clearTimeout(timer);
-  }, [cart, customerName, editingBillId]);
+  }, [cart, customerName, editingBillId, saving]);
 
   async function syncOrder() {
     try {
@@ -158,7 +158,7 @@ export default function POS() {
   function changeQty(id, delta) {
     const itemInMenu = menuItems.find(i => i.id === id);
     const stockLimit = itemInMenu ? parseFloat(itemInMenu.stock || 0) : 999;
-    
+
     let hitLimit = false;
     const newCart = cart.map(i => {
       if (i.id === id) {
@@ -170,7 +170,7 @@ export default function POS() {
       }
       return i;
     }).filter(i => i.qty > 0)
-    
+
     if (hitLimit) {
       toast.error(`Cannot add more. Only ${stockLimit} in stock!`);
     } else {
@@ -215,11 +215,11 @@ export default function POS() {
         const payload = {
           items: cart,
           discount: discountAmt,
-          payment_method: splitPay ? splitAmts : { method: payMethod, amount: total }
+          payment_method: splitPay ? splitAmts : { [payMethod]: total }
         }
         await api.put(`/bills/${editingBillId}`, payload)
         toast.success(`✅ Bill Updated`)
-        
+
         setShowPay(false);
         setLastBill({ bill_no: editingBillNo });
         setPrintMode('bill')
@@ -255,7 +255,7 @@ export default function POS() {
       setShowPay(false);
       setLastBill(bill);
       toast.success(`✅ Bill ₹${bill.total} — ${payMethod.toUpperCase()}`)
-      
+
       const needsKOT = !activeOrderId || !(activeOrders.find(o => o.id === activeOrderId)?.kot_printed);
 
       const printFinalBill = () => {
