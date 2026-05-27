@@ -110,7 +110,8 @@ ipcMain.on('print-silent', (event, options = {}) => {
       silent: true,
       printBackground: true,
       deviceName: options.printerName || '', // Uses default if empty
-      margins: { marginType: 'none' } // Best practice for thermal printers
+      margins: { marginType: 'none' }, // Best practice for thermal printers
+      scaleFactor: options.scaleFactor ? parseFloat(options.scaleFactor) : 100
     }, (success, failureReason) => {
       event.sender.send('print-reply', { success, failureReason })
       if (!success) console.error('Silent Print Failed:', failureReason)

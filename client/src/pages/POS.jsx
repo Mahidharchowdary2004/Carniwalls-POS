@@ -13,6 +13,7 @@ export default function POS() {
     fetchTables, fetchMenu, fetchOrders,
     createOrder, updateOrder, generateBill, posState, setPosState } = useStore()
 
+  const fsFontSize = parseInt(localStorage.getItem('pos_print_font_size')) || 16;
   const { orderType, selectedTable, activeOrderId, cart, originalCart, customerName, discount, discountType, editingBillId, editingBillNo } = posState
 
   const cartChanged = React.useMemo(() => {
@@ -197,7 +198,8 @@ export default function POS() {
       setTimeout(() => {
         if (window.ipcRenderer) {
           const printerName = localStorage.getItem('pos_printer') || ''
-          window.ipcRenderer.send('print-silent', { printerName })
+          const printScale = localStorage.getItem('pos_print_scale') || 100
+          window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
         } else {
           window.print()
         }
@@ -226,7 +228,8 @@ export default function POS() {
         setTimeout(() => {
           if (window.ipcRenderer) {
             const printerName = localStorage.getItem('pos_printer') || ''
-            window.ipcRenderer.send('print-silent', { printerName })
+            const printScale = localStorage.getItem('pos_print_scale') || 100
+            window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
           } else {
             window.print()
           }
@@ -263,7 +266,8 @@ export default function POS() {
         setTimeout(() => {
           if (window.ipcRenderer) {
             const printerName = localStorage.getItem('pos_printer') || ''
-            window.ipcRenderer.send('print-silent', { printerName })
+            const printScale = localStorage.getItem('pos_print_scale') || 100
+            window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
           } else {
             window.print()
           }
@@ -278,7 +282,8 @@ export default function POS() {
         setTimeout(() => {
           if (window.ipcRenderer) {
             const printerName = localStorage.getItem('pos_printer') || ''
-            window.ipcRenderer.send('print-silent', { printerName })
+            const printScale = localStorage.getItem('pos_print_scale') || 100
+            window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
           } else {
             window.print()
           }
@@ -575,7 +580,8 @@ export default function POS() {
                       setTimeout(() => {
                         if (window.ipcRenderer) {
                           const printerName = localStorage.getItem('pos_printer') || ''
-                          window.ipcRenderer.send('print-silent', { printerName })
+                          const printScale = localStorage.getItem('pos_print_scale') || 100
+                          window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
                         } else {
                           window.print()
                         }
@@ -741,14 +747,14 @@ export default function POS() {
       <div className="print-only receipt-content">
         {printMode === 'kot' ? (
           <>
-            <div style={{ textAlign: 'center', marginBottom: 4, fontSize: '16px', fontWeight: 'bold' }}>
+            <div style={{ textAlign: 'center', marginBottom: 4, fontSize: `${fsFontSize}px`, fontWeight: 'bold' }}>
               <div>{new Date().toLocaleDateString('en-GB', { year: '2-digit', month: '2-digit', day: '2-digit' })} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
               <div>KOT - {displayTokenNo}</div>
               <div>{orderType === 'dine-in' ? 'dine in' : orderType}</div>
               <div>Table No: {selectedTable?.number || 'N/A'}</div>
             </div>
             <div style={{ borderTop: '2px solid #000', margin: '4px 0' }} />
-            <table style={{ width: '100%', fontSize: '16px', fontWeight: 'bold' }}>
+            <table style={{ width: '100%', fontSize: `${fsFontSize}px`, fontWeight: 'bold' }}>
               <thead>
                 <tr>
                   <th style={{ textAlign: 'left', padding: '2px 0' }}>Item</th>
@@ -767,10 +773,10 @@ export default function POS() {
           </>
         ) : (
           <>
-            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '20px', marginTop: '10px' }}>
+            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: `${fsFontSize * 1.25}px`, marginTop: '10px' }}>
               BABA DAIRY MILK PRODUCTS
             </div>
-            <div style={{ textAlign: 'center', fontSize: '15px', fontWeight: 'bold', margin: '4px 0' }}>
+            <div style={{ textAlign: 'center', fontSize: `${Math.round(fsFontSize * 0.9375)}px`, fontWeight: 'bold', margin: '4px 0' }}>
               D.No. 2-13-80, Servey No. 411-A,<br />
               411-B, 2nd Ward<br />
               East Side of National Highway Road,<br />
@@ -779,26 +785,26 @@ export default function POS() {
               Pradesh -524137
             </div>
             <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
-            <div style={{ fontSize: '16px', fontWeight: 'bold', margin: '2px 0' }}>
+            <div style={{ fontSize: `${fsFontSize}px`, fontWeight: 'bold', margin: '2px 0' }}>
               Name: {customerName || ''}
             </div>
             <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 'bold' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: `${fsFontSize}px`, fontWeight: 'bold' }}>
               <span>Date: {new Date().toLocaleDateString('en-GB', { year: '2-digit', month: '2-digit', day: '2-digit' })}</span>
               <span>dine in: {selectedTable?.number || ''}</span>
             </div>
-            <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
+            <div style={{ fontSize: `${fsFontSize}px`, fontWeight: 'bold' }}>
               {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 'bold' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: `${fsFontSize}px`, fontWeight: 'bold' }}>
               <span>Cashier: biller</span>
               <span>Bill No.: {displayBillNo}</span>
             </div>
-            <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
+            <div style={{ fontSize: `${fsFontSize}px`, fontWeight: 'bold' }}>
               Token No.: {displayTokenNo}
             </div>
             <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
-            <table style={{ width: '100%', fontSize: '16px', fontWeight: 'bold' }}>
+            <table style={{ width: '100%', fontSize: `${fsFontSize}px`, fontWeight: 'bold' }}>
               <thead>
                 <tr>
                   <th style={{ textAlign: 'left', padding: '2px 0' }}>Item</th>
@@ -819,19 +825,19 @@ export default function POS() {
               </tbody>
             </table>
             <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 'bold' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: `${fsFontSize}px`, fontWeight: 'bold' }}>
               <span>Total Qty: {cart.reduce((sum, i) => sum + i.qty, 0)}</span>
               <span>Sub Total &nbsp;&nbsp; {subtotal.toFixed(2)}</span>
             </div>
             <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
-            <div style={{ textAlign: 'right', fontSize: '18px', fontWeight: 'bold', margin: '4px 0' }}>
+            <div style={{ textAlign: 'right', fontSize: `${Math.round(fsFontSize * 1.125)}px`, fontWeight: 'bold', margin: '4px 0' }}>
               Grand Total &nbsp; ₹ {total.toFixed(2)}
             </div>
-            <div style={{ fontSize: '14px', fontWeight: 'bold', margin: '2px 0' }}>
+            <div style={{ fontSize: `${Math.round(fsFontSize * 0.875)}px`, fontWeight: 'bold', margin: '2px 0' }}>
               Paid via {splitPay ? 'Split' : 'Other'} [{payMethod.toUpperCase()}]
             </div>
             <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
-            <div style={{ textAlign: 'center', fontSize: '16px', fontWeight: 'bold', marginTop: '6px' }}>
+            <div style={{ textAlign: 'center', fontSize: `${fsFontSize}px`, fontWeight: 'bold', marginTop: '6px' }}>
               Thank You | Please Visit Again
             </div>
           </>

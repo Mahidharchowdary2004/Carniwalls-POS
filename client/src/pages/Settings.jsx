@@ -16,6 +16,8 @@ export default function Settings() {
   // Hardware State
   const [printers, setPrinters] = useState([])
   const [selectedPrinter, setSelectedPrinter] = useState(localStorage.getItem('pos_printer') || '')
+  const [printScale, setPrintScale] = useState(localStorage.getItem('pos_print_scale') || '100')
+  const [printFontSize, setPrintFontSize] = useState(localStorage.getItem('pos_print_font_size') || '16')
 
   useEffect(() => {
     api.get('/outlets/out_main').then(r => { 
@@ -74,6 +76,20 @@ export default function Settings() {
     setSelectedPrinter(val)
     localStorage.setItem('pos_printer', val)
     toast.success('Printer saved successfully')
+  }
+
+  function handleScaleChange(e) {
+    const val = e.target.value
+    setPrintScale(val)
+    localStorage.setItem('pos_print_scale', val)
+    toast.success('Print scale saved')
+  }
+
+  function handleFontSizeChange(e) {
+    const val = e.target.value
+    setPrintFontSize(val)
+    localStorage.setItem('pos_print_font_size', val)
+    toast.success('Print font size saved')
   }
 
   return (
@@ -203,6 +219,36 @@ export default function Settings() {
                 )}
                 <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 8 }}>
                   This printer will be used silently for bills and KOTs without showing a print dialog.
+                </div>
+              </div>
+              
+              <div className="form-group" style={{ marginTop: 16 }}>
+                <label className="form-label">Print Scale (%)</label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  value={printScale} 
+                  onChange={handleScaleChange} 
+                  min="10" 
+                  max="200" 
+                />
+                <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 8 }}>
+                  Adjust if your prints are cut off. Default is 100. Lower it (e.g., 80) if content goes off-page.
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginTop: 16 }}>
+                <label className="form-label">Base Font Size (px)</label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  value={printFontSize} 
+                  onChange={handleFontSizeChange} 
+                  min="8" 
+                  max="32" 
+                />
+                <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 8 }}>
+                  Adjust the base font size for the printed receipt. Default is 16.
                 </div>
               </div>
             </div>

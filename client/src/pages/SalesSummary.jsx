@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { api } from '../store'
 
 export default function SalesSummary() {
+  const fsSize = parseInt(localStorage.getItem('pos_print_font_size')) || 16;
   const [period, setPeriod] = useState('month')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
@@ -42,7 +43,15 @@ export default function SalesSummary() {
           </div>
         )}
         <div className="spacer" />
-        <button className="btn btn-sm" onClick={() => { if (window.ipcRenderer) window.ipcRenderer.send('print-silent'); else window.print(); }}>🖨️ Print</button>
+        <button className="btn btn-sm" onClick={() => { 
+          if (window.ipcRenderer) {
+            const printerName = localStorage.getItem('pos_printer') || '';
+            const printScale = localStorage.getItem('pos_print_scale') || 100;
+            window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale });
+          } else {
+            window.print(); 
+          }
+        }}>🖨️ Print</button>
         <button className="btn btn-sm">📄 Export PDF</button>
         <button className="btn btn-sm">📊 Export Excel</button>
       </div>
@@ -94,24 +103,24 @@ export default function SalesSummary() {
 
       {/* THERMAL PRINTER SUMMARY FORMAT (Hidden on screen, visible only when printing) */}
       <div className="print-only receipt-content">
-        <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '16px', marginTop: '10px' }}>
+        <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: `${fsSize}px`, marginTop: '10px' }}>
           SALES SUMMARY
         </div>
-        <div style={{ textAlign: 'center', fontSize: '14px', margin: '4px 0' }}>
+        <div style={{ textAlign: 'center', fontSize: `${Math.round(fsSize * 0.875)}px`, margin: '4px 0' }}>
           Period: {period.toUpperCase()}
           {period === 'custom' && ` (${fromDate} to ${toDate})`}
         </div>
         <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: `${Math.round(fsSize * 0.875)}px` }}>
           <span>Total Sales</span>
           <span>₹{totalRevenue.toLocaleString()}</span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: `${Math.round(fsSize * 0.875)}px` }}>
           <span>Total Orders</span>
           <span>{totalOrders.toLocaleString()}</span>
         </div>
         <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-        <table style={{ width: '100%', fontSize: '14px' }}>
+        <table style={{ width: '100%', fontSize: `${Math.round(fsSize * 0.875)}px` }}>
           <thead>
             <tr>
               <th style={{ textAlign: 'left', fontWeight: 'normal', padding: '2px 0' }}>Date</th>
@@ -132,7 +141,7 @@ export default function SalesSummary() {
           </tbody>
         </table>
         <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-        <div style={{ textAlign: 'center', fontSize: '12px', marginTop: '6px' }}>
+        <div style={{ textAlign: 'center', fontSize: `${Math.round(fsSize * 0.75)}px`, marginTop: '6px' }}>
           Printed on {new Date().toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
         </div>
       </div>
