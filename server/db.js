@@ -33,7 +33,7 @@ async function getPool() {
     port: dbUrl.port || 5432,
     ssl: {
       rejectUnauthorized: false,
-      servername: originalHost // Critical for Neon routing
+      servername: originalHost // Critical for some cloud providers SNI routing
     },
     max: 10,
     idleTimeoutMillis: 30000,

@@ -1,6 +1,6 @@
 {
   "name": "carniwalls-pos",
-  "version": "1.0.11",
+  "version": "1.0.13",
   "description": "CarniWalls-POS Desktop Application",
   "main": "main.js",
   "scripts": {
@@ -15,7 +15,7 @@
   "build": {
     "appId": "com.carniwalls.pos",
     "productName": "CarniWalls-POS",
-    "electronVersion": "42.2.0",
+    "electronVersion": "31.4.0",
     "icon": "../client/public/logo.png",
     "directories": {
       "output": "release",
@@ -50,10 +50,12 @@
     ]
   },
   "dependencies": {
-    "electron-updater": "^6.8.3"
+    "better-sqlite3": "^12.10.0",
+    "electron-updater": "^6.8.3",
+    "pg": "^8.21.0"
   },
   "devDependencies": {
-    "electron": "^42.2.0",
+    "electron": "^31.4.0",
     "electron-builder": "^26.8.1"
   }
 }

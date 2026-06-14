@@ -15,11 +15,39 @@ import Settings from './pages/Settings'
 import LiveMonitor from './pages/LiveMonitor'
 import SalesSummary from './pages/SalesSummary'
 import BillsHistory from './pages/BillsHistory'
+import { useNetwork } from './hooks/useNetwork'
+import { WifiOff } from 'lucide-react'
 
 import { useStore } from './store'
 
 function PrivateRoute({ children }) {
   return localStorage.getItem('rq_token') ? children : <Navigate to="/login" replace />
+}
+
+function OfflineBanner() {
+  const isOffline = useNetwork();
+  
+  if (!isOffline) return null;
+  
+  return (
+    <div style={{
+      backgroundColor: '#c0392b',
+      color: 'white',
+      textAlign: 'center',
+      padding: '8px',
+      fontSize: '14px',
+      fontWeight: 'bold',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '8px',
+      position: 'sticky',
+      top: 0,
+      zIndex: 9999
+    }}>
+      <WifiOff size={16} /> You are currently offline. Changes will be synced when connection is restored.
+    </div>
+  );
 }
 
 export default function App() {
@@ -48,6 +76,7 @@ export default function App() {
           duration: 3000,
         }}
       />
+      <OfflineBanner />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
