@@ -58,6 +58,7 @@ export const useStore = create(
       // Offline support
       isOffline: !navigator.onLine,
       syncQueue: [],
+      lastCheckedDate: null,
       
       setOfflineStatus: (status) => set({ isOffline: status }),
 
@@ -109,10 +110,19 @@ export const useStore = create(
           set(s => ({ tables: s.tables.map(t => t.id === table.id ? { ...t, ...table } : t) }));
         });
 
+        socket.on('midnight-reset', () => {
+          console.log('⏰ Midnight reset broadcast received from server!');
+          get().fetchTables();
+          get().fetchOrders();
+        });
+
         // Trigger startup database synchronization if online
         if (!get().isOffline) {
           get().processSyncQueue();
         }
+
+        // Check for local midnight reset at startup
+        get().checkMidnightReset();
 
         // Set up robust background polling interval for sync (every 60s)
         if (window.syncInterval) clearInterval(window.syncInterval);
@@ -121,6 +131,35 @@ export const useStore = create(
             get().processSyncQueue();
           }
         }, 60000);
+
+        // Periodically check local midnight reset (every 10s)
+        if (window.midnightInterval) clearInterval(window.midnightInterval);
+        window.midnightInterval = setInterval(() => {
+          get().checkMidnightReset();
+        }, 10000);
+      },
+
+      checkMidnightReset: async () => {
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        const { lastCheckedDate, user } = get();
+        
+        // If the day has changed
+        if (lastCheckedDate && lastCheckedDate !== today) {
+          console.log('⏰ Midnight boundary crossed on client! Clearing open orders and tables locally...');
+          try {
+            if (window.ipcRenderer && user?.outlet_id) {
+              // Local SQLite Reset for Electron POS
+              await window.ipcRenderer.invoke('sqlite-run', "UPDATE orders SET status = 'cancelled' WHERE status = 'open' AND outlet_id = ?", [user.outlet_id]);
+              await window.ipcRenderer.invoke('sqlite-run', "UPDATE tables SET status = 'free' WHERE outlet_id = ?", [user.outlet_id]);
+            }
+            // Refresh local store tables and orders
+            await Promise.all([get().fetchTables(), get().fetchOrders()]);
+          } catch (err) {
+            console.error('Local midnight reset error:', err);
+          }
+        }
+        
+        set({ lastCheckedDate: today });
       },
 
       login: async (identifier, password, isPhone = false) => {
@@ -265,6 +304,31 @@ export const useStore = create(
           return data
         } catch (error) {
           console.error('saveMenuItem error:', error)
+          throw error
+        }
+      },
+      saveCategory: async (category) => {
+        const { user } = get()
+        if (!user || !user.outlet_id) return
+        try {
+          const data = await dbAdapter.saveCategory(category, user.outlet_id)
+          set(s => ({
+            categories: category.id ? s.categories.map(c => c.id === category.id ? data : c) : [...s.categories, data]
+          }))
+          return data
+        } catch (error) {
+          console.error('saveCategory error:', error)
+          throw error
+        }
+      },
+      deleteCategory: async (id) => {
+        try {
+          await dbAdapter.deleteCategory(id)
+          set(s => ({
+            categories: s.categories.filter(c => c.id !== id)
+          }))
+        } catch (error) {
+          console.error('deleteCategory error:', error)
           throw error
         }
       },
@@ -685,7 +749,8 @@ export const useStore = create(
         activeOrders: state.activeOrders,
         inventory: state.inventory,
         syncQueue: state.syncQueue,
-        user: state.user
+        user: state.user,
+        lastCheckedDate: state.lastCheckedDate
       }),
       onRehydrateStorage: () => (state) => {
         if (state && state.user && !state.user.outlet_id) {

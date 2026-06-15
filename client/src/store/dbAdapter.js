@@ -289,8 +289,10 @@ export const dbAdapter = {
     
     if (isElectron && !token_no) {
       const tRow = await db.row(
-        `SELECT COALESCE(MAX(token_no), 0) as max_token FROM orders WHERE outlet_id = ? AND created_at LIKE ?`,
-        [outletId, `${datePrefix}%`]
+        `SELECT COALESCE(MAX(token_no), 0) as max_token FROM orders 
+         WHERE outlet_id = ? 
+           AND strftime('%Y-%m-%d', datetime(created_at, '+5 hours', '+30 minutes')) = strftime('%Y-%m-%d', datetime('now', '+5 hours', '+30 minutes'))`,
+        [outletId]
       )
       token_no = (tRow ? parseInt(tRow.max_token) : 0) + 1
     }
@@ -422,8 +424,10 @@ export const dbAdapter = {
 
       // Get daily bill no
       const bRow = await db.row(
-        `SELECT COALESCE(MAX(bill_no), 0) as max_bill FROM bills WHERE outlet_id = ? AND created_at LIKE ?`,
-        [outletId, `${datePrefix}%`]
+        `SELECT COALESCE(MAX(bill_no), 0) as max_bill FROM bills 
+         WHERE outlet_id = ? 
+           AND strftime('%Y-%m-%d', datetime(created_at, '+5 hours', '+30 minutes')) = strftime('%Y-%m-%d', datetime('now', '+5 hours', '+30 minutes'))`,
+        [outletId]
       )
       const bill_no = (bRow ? parseInt(bRow.max_bill) : 0) + 1
 

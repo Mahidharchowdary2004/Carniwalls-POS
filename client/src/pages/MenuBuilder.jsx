@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 const EMOJIS = ['🍛','🧀','🫕','🫓','🍮','🥛','🍗','🍚','🥣','🍔','☕','🐟','🍦','🍖','🥗','🍜','🥘','🫔','🥙','🍱']
 
 export default function MenuBuilder() {
-  const { menuItems, categories, fetchMenu, saveMenuItem, deleteMenuItem } = useStore()
+  const { menuItems, categories, fetchMenu, saveMenuItem, deleteMenuItem, saveCategory, deleteCategory } = useStore()
   const [tab, setTab] = useState('items')
   const [activeCat, setActiveCat] = useState('all')
   const [search, setSearch] = useState('')
@@ -21,6 +21,7 @@ export default function MenuBuilder() {
 
   // Category modal
   const [showCatModal, setShowCatModal] = useState(false)
+  const [editingCat, setEditingCat] = useState(null)
   const [catForm, setCatForm] = useState({ name: '', icon: '🍽️' })
 
   useEffect(() => { fetchMenu() }, [])
@@ -65,12 +66,35 @@ export default function MenuBuilder() {
     if (!catForm.name) return toast.error('Name required')
     setSaving(true)
     try {
-      const { data } = await api.post('/categories', { ...catForm, sort_order: categories.length + 1 })
+      await saveCategory(editingCat ? { ...catForm, id: editingCat.id } : { ...catForm, sort_order: categories.length + 1 })
       await fetchMenu()
-      toast.success('Category added')
+      toast.success(editingCat ? 'Category updated' : 'Category added')
       setShowCatModal(false)
     } catch { toast.error('Failed') }
     finally { setSaving(false) }
+  }
+
+  async function handleDeleteCategory(cat) {
+    if (!confirm(`Delete category "${cat.name}"? This might affect items under this category.`)) return
+    setSaving(true)
+    try {
+      await deleteCategory(cat.id)
+      await fetchMenu()
+      toast.success('Category deleted')
+    } catch { toast.error('Delete failed') }
+    finally { setSaving(false) }
+  }
+
+  function openNewCategory() {
+    setEditingCat(null)
+    setCatForm({ name: '', icon: '🍽️' })
+    setShowCatModal(true)
+  }
+
+  function openEditCategory(cat) {
+    setEditingCat(cat)
+    setCatForm({ name: cat.name, icon: cat.icon })
+    setShowCatModal(true)
   }
 
   async function handleClearAll() {
@@ -145,7 +169,7 @@ export default function MenuBuilder() {
         {tab === 'items' ? (
           <button className="btn btn-primary" onClick={openNew}>+ Add Item</button>
         ) : (
-          <button className="btn btn-primary" onClick={() => { setCatForm({ name: '', icon: '🍽️' }); setShowCatModal(true) }}>+ Add Category</button>
+          <button className="btn btn-primary" onClick={openNewCategory}>+ Add Category</button>
         )}
       </div>
 
@@ -246,7 +270,8 @@ export default function MenuBuilder() {
                 {menuItems.filter(i => i.category_id === cat.id).length} items
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'center' }}>
-                <button className="btn btn-sm" style={{ padding: '6px 12px', fontSize: 13 }}>✏️ Edit</button>
+                <button className="btn btn-sm" onClick={() => openEditCategory(cat)} style={{ padding: '6px 12px', fontSize: 13 }}>✏️ Edit</button>
+                <button className="btn btn-sm btn-danger" onClick={() => handleDeleteCategory(cat)} style={{ padding: '6px 12px', fontSize: 13 }}>🗑️</button>
               </div>
             </div>
           ))}
@@ -351,7 +376,7 @@ export default function MenuBuilder() {
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowCatModal(false)}>
           <div className="modal" style={{ width: 360 }}>
             <div className="modal-header">
-              <div className="modal-title">Add Category</div>
+              <div className="modal-title">{editingCat ? 'Edit Category' : 'Add Category'}</div>
               <button className="btn btn-sm" onClick={() => setShowCatModal(false)}>✕</button>
             </div>
             <div className="form-group">
@@ -372,7 +397,9 @@ export default function MenuBuilder() {
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setShowCatModal(false)}>Cancel</button>
-              <button className="btn btn-primary" style={{ flex: 2, justifyContent: 'center' }} onClick={handleSaveCategory} disabled={saving}>+ Add</button>
+              <button className="btn btn-primary" style={{ flex: 2, justifyContent: 'center' }} onClick={handleSaveCategory} disabled={saving}>
+                {saving ? <span className="spinner" style={{ width: 16, height: 16 }} /> : (editingCat ? '✓ Save Changes' : '+ Add')}
+              </button>
             </div>
           </div>
         </div>

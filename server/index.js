@@ -369,7 +369,7 @@ app.post('/api/orders', auth, async (req, res) => {
     let token_no = clientTokenNo;
     if (!token_no) {
       const tRes = await db.query(
-        "SELECT COALESCE(MAX(token_no), 0) as max_token FROM orders WHERE outlet_id = $1 AND (created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date",
+        "SELECT COALESCE(MAX(token_no), 0) as max_token FROM orders WHERE outlet_id = $1 AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date",
         [req.user.outlet_id]
       );
       token_no = parseInt(tRes.rows[0].max_token) + 1;
@@ -482,7 +482,7 @@ app.post('/api/bills', auth, async (req, res) => {
     let bill_no = clientBillNo;
     if (!bill_no) {
       const bRes = await db.query(
-        "SELECT COALESCE(MAX(bill_no), 0) as max_bill FROM bills WHERE outlet_id = $1 AND (created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date",
+        "SELECT COALESCE(MAX(bill_no), 0) as max_bill FROM bills WHERE outlet_id = $1 AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date",
         [req.user.outlet_id]
       );
       bill_no = parseInt(bRes.rows[0].max_bill) + 1;
@@ -1064,6 +1064,33 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
       await db.query("INSERT INTO users (name, email, phone, password, role, outlet_id) VALUES ('Cashier', 'cashier@restauraq.com', '8888888888', $1, 'cashier', 'out_main') ON CONFLICT (email) DO UPDATE SET phone = EXCLUDED.phone, password = EXCLUDED.password", [cashierPass]);
 
       console.log('✅ Database schema verified and seeded.');
+
+      // Start Midnight Clear Scheduler (Asia/Kolkata timezone)
+      setInterval(async () => {
+        const now = new Date();
+        const kolkataTime = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'Asia/Kolkata',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        }).format(now);
+
+        if (kolkataTime === '00:00:00') {
+          try {
+            console.log('⏰ Midnight IST reached. Automatically clearing all tables and cancelling all open orders...');
+            // Cancel all open orders on cloud DB
+            await db.query("UPDATE orders SET status = 'cancelled' WHERE status = 'open'");
+            // Set all tables to free on cloud DB
+            await db.query("UPDATE tables SET status = 'free'");
+            // Broadcast reset event to all connected clients
+            io.emit('midnight-reset');
+            console.log('✅ Midnight reset completed and clients notified.');
+          } catch (err) {
+            console.error('❌ Failed to run midnight table reset:', err);
+          }
+        }
+      }, 1000);
     } catch (err) {
       console.error('⚠️ Startup migration failed:', err.message);
     }
