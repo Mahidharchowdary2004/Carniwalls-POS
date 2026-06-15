@@ -42,10 +42,10 @@ export default function Dashboard() {
       const [s, r, ms, os, w, t, inv] = await Promise.all([
         api.get('/dashboard/stats' + q),
         api.get('/dashboard/recent-orders' + q),
-        api.get('/dashboard/menu-summary'),
+        api.get('/dashboard/menu-summary' + q),
         api.get('/dashboard/order-summary' + q),
         api.get('/reports/weekly'),
-        api.get('/reports/top-items'),
+        api.get('/reports/top-items' + q),
         api.get('/dashboard/inventory-alerts'),
       ])
       setStats(s.data); setRecent(r.data)
@@ -222,12 +222,12 @@ export default function Dashboard() {
           </div>
           <div style={{ padding:'16px 20px' }}>
             {[
-              ['Total Items',    menuSummary?.total||0,     'var(--text)'],
-              ['Active Items',   menuSummary?.active||0,    'var(--green)'],
-              ['Veg Items',      menuSummary?.veg||0,       'var(--green)'],
-              ['Non-Veg Items',  menuSummary?.non_veg||0,   'var(--red)'],
-              ['Avg Item Price', `₹${menuSummary?.avg_price||0}`, 'var(--orange)'],
-              ['Categories',     catData.length,            'var(--blue)'],
+              [period ? 'Total Items Sold' : 'Total Items',    menuSummary?.total||0,     'var(--text)'],
+              [period ? 'Unique Items Sold' : 'Active Items',   menuSummary?.active||0,    'var(--green)'],
+              [period ? 'Veg Items Sold' : 'Veg Items',      menuSummary?.veg||0,       'var(--green)'],
+              [period ? 'Non-Veg Items Sold' : 'Non-Veg Items',  menuSummary?.non_veg||0,   'var(--red)'],
+              [period ? 'Avg Sold Price' : 'Avg Item Price', `₹${menuSummary?.avg_price||0}`, 'var(--orange)'],
+              [period ? 'Categories Sold' : 'Categories',     catData.length,            'var(--blue)'],
             ].map(([label, val, color], i) => (
               <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid var(--border)', fontSize:13 }}>
                 <span style={{ color:'var(--text2)' }}>{label}</span>

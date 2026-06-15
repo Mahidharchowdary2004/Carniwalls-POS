@@ -237,7 +237,7 @@ export default function BillsHistory() {
                       >
                         {/* Global bill_no */}
                         <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, color: 'var(--text2)', fontWeight: 700 }}>
-                          {idx + 1}
+                          {bill.bill_no}
                         </td>
                         <td>
                           <span className="badge badge-gray" style={{ textTransform: 'capitalize' }}>

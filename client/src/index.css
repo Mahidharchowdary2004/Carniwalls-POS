@@ -1259,3 +1259,56 @@ tr:hover td {
   body:has(.print-only) .print-only .qty { text-align: center; }
   body:has(.print-only) .print-only .right { text-align: right; }
 }
+
+/* ── Menu Builder Specific Font Sizes ── */
+.menu-builder-container .stat-label {
+  font-size: 15px;
+}
+.menu-builder-container .stat-value {
+  font-size: 26px;
+}
+.menu-builder-container .tab {
+  font-size: 16px;
+  padding: 8px 20px;
+}
+.menu-builder-container .btn {
+  font-size: 15px;
+}
+.menu-builder-container .btn-sm {
+  font-size: 14px;
+  padding: 6px 12px;
+}
+.menu-builder-container .search-box input {
+  font-size: 15px;
+}
+.menu-builder-container .search-box svg {
+  width: 16px;
+  height: 16px;
+}
+.menu-builder-table th {
+  font-size: 14px;
+  padding: 14px 16px;
+}
+.menu-builder-table td {
+  font-size: 16px;
+  padding: 16px 16px;
+}
+.menu-builder-table .badge {
+  font-size: 13px;
+  padding: 4px 12px;
+}
+.menu-builder-container .modal-title {
+  font-size: 20px;
+}
+.menu-builder-container .form-label {
+  font-size: 15px;
+}
+.menu-builder-container .form-input,
+.menu-builder-container .form-select,
+.menu-builder-container .form-textarea {
+  font-size: 15px;
+  padding: 10px 14px;
+}
+.menu-builder-container .form-select {
+  font-size: 15px;
+}

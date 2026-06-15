@@ -93,15 +93,15 @@ app.get('/api/dashboard/stats', auth, async (req, res) => {
   try {
     const { period = 'today', from, to } = req.query;
 
-    let currentFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date";
+    let currentFilter = "(created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date";
 
-    let previousFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 1";
+    let previousFilter = "(created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date - 1";
     let params = [req.user.outlet_id];
     let pIdx = 2;
 
     if (period === 'yesterday') {
-      currentFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 1";
-      previousFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 2";
+      currentFilter = "(created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date - 1";
+      previousFilter = "(created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date - 2";
 
     } else if (period === 'month') {
       currentFilter = "created_at >= CURRENT_DATE - INTERVAL '30 days'";
@@ -158,12 +158,12 @@ app.get('/api/dashboard/stats', auth, async (req, res) => {
 app.get('/api/dashboard/recent-orders', auth, async (req, res) => {
   try {
     const { period = 'today', from, to } = req.query;
-    let currentFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date";
+    let currentFilter = "(created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date";
     let params = [req.user.outlet_id];
     let pIdx = 2;
 
     if (period === 'yesterday') {
-      currentFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 1";
+      currentFilter = "(created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date - 1";
 
     } else if (period === 'month') {
       currentFilter = "created_at >= CURRENT_DATE - INTERVAL '30 days'";
@@ -329,17 +329,33 @@ app.delete('/api/menu/:id', auth, async (req, res) => {
   } catch (err) { console.error('GET /api/orders error:', err); res.status(500).json({ error: err.message }); }
 });
 
+app.delete('/api/menu', auth, async (req, res) => {
+  try {
+    await db.query('DELETE FROM menu_items WHERE outlet_id = $1', [req.user.outlet_id]);
+    res.json({ success: true });
+  } catch (err) { console.error('DELETE /api/menu error:', err); res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/categories', auth, async (req, res) => {
+  try {
+    // Delete menu items first to avoid foreign key constraints
+    await db.query('DELETE FROM menu_items WHERE outlet_id = $1', [req.user.outlet_id]);
+    await db.query('DELETE FROM categories WHERE outlet_id = $1', [req.user.outlet_id]);
+    res.json({ success: true });
+  } catch (err) { console.error('DELETE /api/categories error:', err); res.status(500).json({ error: err.message }); }
+});
+
 // ─── ORDERS (POS) ────────────────────────────────────────────────────────────
 app.get('/api/orders', auth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT * FROM orders WHERE status != \'billed\' AND outlet_id = $1', [req.user.outlet_id]);
+    const { rows } = await db.query('SELECT * FROM orders WHERE status = \'open\' AND outlet_id = $1', [req.user.outlet_id]);
     res.json(rows);
   } catch (err) { console.error('GET /api/orders error:', err); res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/orders', auth, async (req, res) => {
   try {
-    const { table_id, items, order_type = 'dine-in', customer_name, notes } = req.body;
+    const { id: clientId, table_id, items, order_type = 'dine-in', customer_name, notes, token_no: clientTokenNo, created_at: clientCreatedAt } = req.body;
 
     // Fetch outlet for tax rates
     const outRes = await db.query('SELECT * FROM outlets WHERE id = $1', [req.user.outlet_id]);
@@ -347,19 +363,24 @@ app.post('/api/orders', auth, async (req, res) => {
 
     const subtotal = items.reduce((s, i) => s + (i.price * i.qty), 0);
 
-    const id = `ord_${Date.now()}`;
+    const id = clientId || `ord_${Date.now()}`;
 
-    // Get daily token number
-    const tRes = await db.query(
-      "SELECT COALESCE(MAX(token_no), 0) as max_token FROM orders WHERE outlet_id = $1 AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date",
-      [req.user.outlet_id]
-    );
-    const token_no = parseInt(tRes.rows[0].max_token) + 1;
+    // Get daily token number or use client provided one
+    let token_no = clientTokenNo;
+    if (!token_no) {
+      const tRes = await db.query(
+        "SELECT COALESCE(MAX(token_no), 0) as max_token FROM orders WHERE outlet_id = $1 AND (created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date",
+        [req.user.outlet_id]
+      );
+      token_no = parseInt(tRes.rows[0].max_token) + 1;
+    }
+
+    const created_at = clientCreatedAt || new Date().toISOString();
 
     const { rows } = await db.query(`
-      INSERT INTO orders (id, table_id, items, order_type, customer_name, subtotal, cgst, sgst, discount, total, status, kot_status, notes, outlet_id, token_no)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, 'open', 'preparing', $10, $11, $12) RETURNING *
-    `, [id, table_id, JSON.stringify(items), order_type, customer_name, subtotal, 0, 0, subtotal, notes, req.user.outlet_id, token_no]);
+      INSERT INTO orders (id, table_id, items, order_type, customer_name, subtotal, cgst, sgst, discount, total, status, kot_status, notes, outlet_id, token_no, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, 'open', 'preparing', $10, $11, $12, $13) RETURNING *
+    `, [id, table_id, JSON.stringify(items), order_type, customer_name, subtotal, 0, 0, subtotal, notes, req.user.outlet_id, token_no, created_at]);
 
     const order = rows[0];
 
@@ -450,23 +471,29 @@ app.post('/api/tables/transfer', auth, async (req, res) => {
 // ─── BILLING ─────────────────────────────────────────────────────────────────
 app.post('/api/bills', auth, async (req, res) => {
   try {
-    const { order_id, payment_method, discount = 0 } = req.body;
+    const { id: clientId, bill_no: clientBillNo, created_at: clientCreatedAt, order_id, payment_method, discount = 0 } = req.body;
     const ordRes = await db.query('SELECT * FROM orders WHERE id = $1', [order_id]);
     const order = ordRes.rows[0];
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
-    const billId = `bill_${Date.now()}`;
+    const billId = clientId || `bill_${Date.now()}`;
 
-    // Get daily bill number
-    const bRes = await db.query(
-      "SELECT COALESCE(MAX(bill_no), 0) as max_bill FROM bills WHERE outlet_id = $1 AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date",
-      [req.user.outlet_id]
-    );
-    const bill_no = parseInt(bRes.rows[0].max_bill) + 1;
+    // Get daily bill number or use client provided one
+    let bill_no = clientBillNo;
+    if (!bill_no) {
+      const bRes = await db.query(
+        "SELECT COALESCE(MAX(bill_no), 0) as max_bill FROM bills WHERE outlet_id = $1 AND (created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date",
+        [req.user.outlet_id]
+      );
+      bill_no = parseInt(bRes.rows[0].max_bill) + 1;
+    }
+
+    const created_at = clientCreatedAt || new Date().toISOString();
+
     const { rows } = await db.query(`
-      INSERT INTO bills (id, order_id, table_id, order_type, items, subtotal, cgst, sgst, discount, total, payment_method, status, outlet_id, bill_no)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'paid', $12, $13) RETURNING *
-    `, [billId, order_id, order.table_id, order.order_type, JSON.stringify(order.items), order.subtotal, 0, 0, discount, order.subtotal - discount, payment_method, req.user.outlet_id, bill_no]);
+      INSERT INTO bills (id, order_id, table_id, order_type, items, subtotal, cgst, sgst, discount, total, payment_method, status, outlet_id, bill_no, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'paid', $12, $13, $14) RETURNING *
+    `, [billId, order_id, order.table_id, order.order_type, JSON.stringify(order.items), order.subtotal, 0, 0, discount, order.subtotal - discount, payment_method, req.user.outlet_id, bill_no, created_at]);
 
     await db.query('UPDATE orders SET status = \'billed\' WHERE id = $1', [order_id]);
     if (order.table_id) {
@@ -614,7 +641,7 @@ app.get('/api/reports/sales', auth, async (req, res) => {
     const params = [req.user.outlet_id];
     let pIdx = 2;
 
-    if (period === 'today') { sql += ` AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date`; }
+    if (period === 'today') { sql += ` AND (created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date`; }
     else if (period === 'week') { sql += ` AND created_at >= CURRENT_DATE - INTERVAL '7 days'`; }
     else if (period === 'month') { sql += ` AND created_at >= date_trunc('month', CURRENT_DATE)`; }
 
@@ -657,11 +684,11 @@ app.get('/api/reports/sales', auth, async (req, res) => {
 app.get('/api/reports/weekly', auth, async (req, res) => {
   try {
     const { rows } = await db.query(`
-      SELECT TO_CHAR(created_at, 'Dy') as day, SUM(total) as revenue, count(*) as orders
+      SELECT TO_CHAR(created_at + INTERVAL '5.5 hours', 'Dy') as day, SUM(total) as revenue, count(*) as orders
       FROM bills 
       WHERE outlet_id = $1 AND created_at >= CURRENT_DATE - INTERVAL '7 days'
-      GROUP BY 1, date_trunc('day', created_at)
-      ORDER BY date_trunc('day', created_at)
+      GROUP BY 1, date_trunc('day', created_at + INTERVAL '5.5 hours')
+      ORDER BY date_trunc('day', created_at + INTERVAL '5.5 hours')
     `, [req.user.outlet_id]);
     res.json(rows);
   } catch (err) { console.error('GET /api/orders error:', err); res.status(500).json({ error: err.message }); }
@@ -685,7 +712,7 @@ app.get('/api/reports/daily', auth, async (req, res) => {
 
     const { rows } = await db.query(`
       SELECT 
-        TO_CHAR(created_at, 'YYYY-MM-DD') as date, 
+        TO_CHAR(created_at + INTERVAL '5.5 hours', 'YYYY-MM-DD') as date, 
         SUM(total) as revenue, 
         count(*) as orders,
         SUM(discount) as discount
@@ -700,13 +727,27 @@ app.get('/api/reports/daily', auth, async (req, res) => {
 
 app.get('/api/reports/top-items', auth, async (req, res) => {
   try {
+    const { period, from, to } = req.query;
+    let filter = "";
+    let params = [req.user.outlet_id];
+    if (period === 'today') {
+      filter = "AND (created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date";
+    } else if (period === 'yesterday') {
+      filter = "AND (created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date - 1";
+    } else if (period === 'month') {
+      filter = "AND created_at >= CURRENT_DATE - INTERVAL '30 days'";
+    } else if (period === 'custom' && from && to) {
+      filter = "AND created_at >= $2 AND created_at <= $3";
+      params.push(from, to + ' 23:59:59');
+    }
+
     // This is a bit complex as items are stored as JSONB
     const { rows } = await db.query(`
       SELECT item->>'name' as name, SUM((item->>'qty')::int) as count
       FROM bills, jsonb_array_elements(items) as item
-      WHERE outlet_id = $1
+      WHERE outlet_id = $1 ${filter}
       GROUP BY 1 ORDER BY 2 DESC LIMIT 10
-    `, [req.user.outlet_id]);
+    `, params);
     res.json(rows);
   } catch (err) { console.error('GET /api/orders error:', err); res.status(500).json({ error: err.message }); }
 });
@@ -732,13 +773,13 @@ app.get('/api/dashboard/order-summary', auth, async (req, res) => {
   try {
     const { period = 'today', from, to } = req.query;
 
-    let currentFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date";
+    let currentFilter = "(created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date";
     let params = [req.user.outlet_id];
     let pIdx = 2;
     let isDaily = false;
 
     if (period === 'yesterday') {
-      currentFilter = "(created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 1";
+      currentFilter = "(created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date - 1";
 
     } else if (period === 'month') {
       currentFilter = "created_at >= CURRENT_DATE - INTERVAL '30 days'";
@@ -760,7 +801,7 @@ app.get('/api/dashboard/order-summary', auth, async (req, res) => {
     let hourly;
     if (isDaily) {
       const { rows } = await db.query(`
-        SELECT TO_CHAR(created_at, 'YYYY-MM-DD') as day, count(*) as count, SUM(total) as revenue
+        SELECT TO_CHAR(created_at + INTERVAL '5.5 hours', 'YYYY-MM-DD') as day, count(*) as count, SUM(total) as revenue
         FROM bills 
         WHERE outlet_id = $1 AND ${currentFilter}
         GROUP BY 1 ORDER BY 1
@@ -768,7 +809,7 @@ app.get('/api/dashboard/order-summary', auth, async (req, res) => {
       hourly = rows.map(h => ({ hour: h.day, label: new Date(h.day).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }), count: parseInt(h.count), revenue: parseFloat(h.revenue) }));
     } else {
       const { rows } = await db.query(`
-        SELECT EXTRACT(HOUR FROM created_at) as hour, count(*) as count, SUM(total) as revenue
+        SELECT EXTRACT(HOUR FROM created_at + INTERVAL '5.5 hours') as hour, count(*) as count, SUM(total) as revenue
         FROM bills 
         WHERE outlet_id = $1 AND ${currentFilter}
         GROUP BY 1 ORDER BY 1
@@ -792,6 +833,77 @@ app.get('/api/dashboard/order-summary', auth, async (req, res) => {
 
 app.get('/api/dashboard/menu-summary', auth, async (req, res) => {
   try {
+    const { period, from, to } = req.query;
+    
+    if (period) {
+      // Return sales summary for the period
+      let filter = "";
+      let params = [req.user.outlet_id];
+      if (period === 'today') {
+        filter = "AND (b.created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date";
+      } else if (period === 'yesterday') {
+        filter = "AND (b.created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date - 1";
+      } else if (period === 'month') {
+        filter = "AND b.created_at >= CURRENT_DATE - INTERVAL '30 days'";
+      } else if (period === 'custom' && from && to) {
+        filter = "AND b.created_at >= $2 AND b.created_at <= $3";
+        params.push(from, to + ' 23:59:59');
+      }
+
+      const salesRes = await db.query(`
+        SELECT 
+          COALESCE(SUM((item->>'qty')::int), 0) as total,
+          COUNT(DISTINCT item->>'name') as active,
+          COALESCE(SUM(CASE WHEN mi.type = 'veg' THEN (item->>'qty')::int ELSE 0 END), 0) as veg,
+          COALESCE(SUM(CASE WHEN mi.type != 'veg' THEN (item->>'qty')::int ELSE 0 END), 0) as non_veg,
+          COALESCE(ROUND(AVG((item->>'price')::numeric)), 0) as avg_price
+        FROM bills b
+        CROSS JOIN jsonb_array_elements(b.items) as item
+        LEFT JOIN menu_items mi ON mi.name = item->>'name' AND mi.outlet_id = b.outlet_id
+        WHERE b.outlet_id = $1 ${filter}
+      `, params);
+
+      const catsRes = await db.query(`
+        SELECT c.name, COALESCE(SUM((item->>'qty')::int), 0) as count
+        FROM bills b
+        CROSS JOIN jsonb_array_elements(b.items) as item
+        LEFT JOIN menu_items mi ON mi.name = item->>'name' AND mi.outlet_id = b.outlet_id
+        LEFT JOIN categories c ON c.id = mi.category_id
+        WHERE b.outlet_id = $1 ${filter} AND c.name IS NOT NULL
+        GROUP BY c.name
+        ORDER BY count DESC
+      `, params);
+
+      const priceRes = await db.query(`
+        SELECT 
+          COALESCE(SUM(CASE WHEN (item->>'price')::numeric <= 100 THEN (item->>'qty')::int ELSE 0 END), 0) as "0-100",
+          COALESCE(SUM(CASE WHEN (item->>'price')::numeric > 100 AND (item->>'price')::numeric <= 300 THEN (item->>'qty')::int ELSE 0 END), 0) as "101-300",
+          COALESCE(SUM(CASE WHEN (item->>'price')::numeric > 300 AND (item->>'price')::numeric <= 500 THEN (item->>'qty')::int ELSE 0 END), 0) as "301-500",
+          COALESCE(SUM(CASE WHEN (item->>'price')::numeric > 500 THEN (item->>'qty')::int ELSE 0 END), 0) as "500+"
+        FROM bills b
+        CROSS JOIN jsonb_array_elements(b.items) as item
+        WHERE b.outlet_id = $1 ${filter}
+      `, params);
+
+      const stats = salesRes.rows[0];
+      const price_ranges = priceRes.rows[0] || { "0-100": 0, "101-300": 0, "301-500": 0, "500+": 0 };
+
+      return res.json({
+        total: parseInt(stats.total),
+        active: parseInt(stats.active),
+        veg: parseInt(stats.veg),
+        non_veg: parseInt(stats.non_veg),
+        avg_price: parseInt(stats.avg_price),
+        by_category: catsRes.rows.map(r => ({ name: r.name, count: parseInt(r.count) })),
+        price_ranges: {
+          '0-100': parseInt(price_ranges['0-100']),
+          '101-300': parseInt(price_ranges['101-300']),
+          '301-500': parseInt(price_ranges['301-500']),
+          '500+': parseInt(price_ranges['500+'])
+        }
+      });
+    }
+
     const { rows: items } = await db.query('SELECT * FROM menu_items WHERE outlet_id = $1', [req.user.outlet_id]);
     const { rows: cats } = await db.query('SELECT * FROM categories WHERE outlet_id = $1', [req.user.outlet_id]);
 

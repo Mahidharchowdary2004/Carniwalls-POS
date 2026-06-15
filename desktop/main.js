@@ -18,6 +18,7 @@ function createWindow() {
     title: 'CarniWalls-POS',
     width: 1200,
     height: 800,
+    icon: join(__dirname, 'dist/logo.png'),
     webPreferences: {
       preload,
       // Warning: Enable nodeIntegration and disable contextIsolation is not secure in production
@@ -37,11 +38,6 @@ function createWindow() {
   } else {
     win.loadFile(indexHtml)
   }
-
-  // Test actively push message to the Electron-Renderer
-  win.webContents.on('did-finish-load', () => {
-    win?.webContents.send('main-process-message', new Date().toLocaleString())
-  })
 
   // Make all links open with the browser, not with the application
   win.webContents.setWindowOpenHandler(({ url }) => {

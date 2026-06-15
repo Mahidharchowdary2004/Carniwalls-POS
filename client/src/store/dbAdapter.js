@@ -268,7 +268,7 @@ export const dbAdapter = {
   // --- ORDERS ---
   getOrders: async (outletId) => {
     if (isElectron) {
-      const rows = await db.all(`SELECT * FROM orders WHERE status != 'billed' AND outlet_id = ?`, [outletId])
+      const rows = await db.all(`SELECT * FROM orders WHERE status = 'open' AND outlet_id = ?`, [outletId])
       return rows.map(r => ({
         ...r,
         items: deserialize(r.items),

@@ -73,10 +73,34 @@ export default function MenuBuilder() {
     finally { setSaving(false) }
   }
 
+  async function handleClearAll() {
+    if (!confirm('⚠️ WARNING: This will permanently delete all menu items and categories! Are you sure?')) return
+    setSaving(true)
+    try {
+      // 1. Delete on Cloud Postgres
+      await api.delete('/categories')
+      
+      // 2. Delete on local SQLite if in Electron
+      if (window.ipcRenderer) {
+        const outletId = useStore.getState().user?.outlet_id || 'out_main'
+        await window.ipcRenderer.invoke('sqlite-run', 'DELETE FROM menu_items WHERE outlet_id = ?', [outletId])
+        await window.ipcRenderer.invoke('sqlite-run', 'DELETE FROM categories WHERE outlet_id = ?', [outletId])
+      }
+
+      await fetchMenu()
+      toast.success('All menu items and categories successfully deleted')
+    } catch (err) {
+      console.error('Clear failed', err)
+      toast.error('Failed to clear menu data')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const catMap = Object.fromEntries(categories.map(c => [c.id, c]))
 
   return (
-    <div>
+    <div className="menu-builder-container">
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, marginBottom: 24 }}>
         <div className="stat-card">
@@ -113,6 +137,11 @@ export default function MenuBuilder() {
           <div className={`tab ${tab === 'categories' ? 'active' : ''}`} onClick={() => setTab('categories')}>Categories</div>
         </div>
         <div className="spacer" />
+        {(menuItems.length > 0 || categories.length > 0) && (
+          <button className="btn btn-danger" onClick={handleClearAll} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            🗑️ Clear All Data
+          </button>
+        )}
         {tab === 'items' ? (
           <button className="btn btn-primary" onClick={openNew}>+ Add Item</button>
         ) : (
@@ -140,15 +169,13 @@ export default function MenuBuilder() {
 
           <div className="card">
             <div className="table-wrap">
-              <table>
+              <table className="menu-builder-table">
                 <thead>
                   <tr>
                     <th>Item</th>
                     <th>Category</th>
                     <th>Type</th>
                     <th>Price</th>
-                    <th>Cost</th>
-                    <th>Margin</th>
                     <th>Channels</th>
                     <th>Stock</th>
                     <th>Status</th>
@@ -157,15 +184,14 @@ export default function MenuBuilder() {
                 </thead>
                 <tbody>
                   {filtered.map(item => {
-                    const margin = item.cost ? Math.round((item.price - item.cost) / item.price * 100) : null
                     return (
                       <tr key={item.id}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <span style={{ fontSize: 20 }}>{item.emoji}</span>
                             <div>
-                              <div style={{ fontWeight: 600, fontSize: 13 }}>{item.name}</div>
-                              <div style={{ fontSize: 11, color: 'var(--text3)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.description}</div>
+                              <div style={{ fontWeight: 600, fontSize: 16 }}>{item.name}</div>
+                              <div style={{ fontSize: 13, color: 'var(--text3)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.description}</div>
                             </div>
                           </div>
                         </td>
@@ -174,27 +200,19 @@ export default function MenuBuilder() {
                           <span className={`badge ${item.type === 'veg' ? 'badge-success' : 'badge-danger'}`} style={{ textTransform: 'capitalize' }}>{item.type}</span>
                         </td>
                         <td style={{ fontWeight: 600 }}>₹{item.price}</td>
-                        <td style={{ color: 'var(--text2)' }}>₹{item.cost || '—'}</td>
-                        <td>
-                          {margin !== null ? (
-                            <span style={{ color: margin > 60 ? 'var(--green)' : margin > 40 ? 'var(--yellow)' : 'var(--red)', fontWeight: 600, fontSize: 12 }}>
-                              {margin}%
-                            </span>
-                          ) : '—'}
-                        </td>
                         <td>
                           <div style={{ display: 'flex', gap: 4 }}>
-                            {item.available_dine && <span className="badge badge-gray" style={{ padding: '2px 6px', fontSize: 10 }}>🪑</span>}
-                            {item.available_takeaway && <span className="badge badge-gray" style={{ padding: '2px 6px', fontSize: 10 }}>🛍️</span>}
-                            {item.available_delivery && <span className="badge badge-gray" style={{ padding: '2px 6px', fontSize: 10 }}>🛵</span>}
+                            {item.available_dine && <span className="badge badge-gray" style={{ padding: '3px 8px', fontSize: 12 }}>🪑</span>}
+                            {item.available_takeaway && <span className="badge badge-gray" style={{ padding: '3px 8px', fontSize: 12 }}>🛍️</span>}
+                            {item.available_delivery && <span className="badge badge-gray" style={{ padding: '3px 8px', fontSize: 12 }}>🛵</span>}
                           </div>
                         </td>
                         <td>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <div style={{ fontWeight: 600, fontSize: 13, color: (item.stock || 0) <= (item.min_stock || 0) ? 'var(--red)' : 'inherit' }}>
+                            <div style={{ fontWeight: 600, fontSize: 15, color: (item.stock || 0) <= (item.min_stock || 0) ? 'var(--red)' : 'inherit' }}>
                               {parseInt(item.stock || 0)} qty
                             </div>
-                            <div style={{ fontSize: 10, color: 'var(--text3)' }}>Min: {parseInt(item.min_stock || 0)}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text3)' }}>Min: {parseInt(item.min_stock || 0)}</div>
                           </div>
                         </td>
                         <td>
@@ -221,14 +239,14 @@ export default function MenuBuilder() {
       {tab === 'categories' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12 }}>
           {categories.map(cat => (
-            <div key={cat.id} className="card" style={{ padding: 12, textAlign: 'center' }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>{cat.icon}</div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{cat.name}</div>
-              <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2 }}>
+            <div key={cat.id} className="card" style={{ padding: 16, textAlign: 'center' }}>
+              <div style={{ fontSize: 34, marginBottom: 8 }}>{cat.icon}</div>
+              <div style={{ fontWeight: 600, fontSize: 17 }}>{cat.name}</div>
+              <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 2 }}>
                 {menuItems.filter(i => i.category_id === cat.id).length} items
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'center' }}>
-                <button className="btn btn-sm" style={{ padding: '4px 8px', fontSize: 11 }}>✏️ Edit</button>
+                <button className="btn btn-sm" style={{ padding: '6px 12px', fontSize: 13 }}>✏️ Edit</button>
               </div>
             </div>
           ))}
@@ -283,12 +301,6 @@ export default function MenuBuilder() {
               <div className="form-group">
                 <label className="form-label">Price (₹) *</label>
                 <input className="form-input" type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: parseInt(e.target.value) || 0 }))} />
-              </div>
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Cost (₹)</label>
-                <input className="form-input" type="number" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: parseInt(e.target.value) || 0 }))} />
               </div>
               <div className="form-group">
                 <label className="form-label">Description</label>

@@ -11,7 +11,7 @@ const ORDER_TYPES = [
 export default function POS() {
   const { tables, menuItems, categories, activeOrders,
     fetchTables, fetchMenu, fetchOrders,
-    createOrder, updateOrder, generateBill, posState, setPosState } = useStore()
+    createOrder, updateOrder, cancelOrder, generateBill, posState, setPosState } = useStore()
 
   const fsFontSize = parseInt(localStorage.getItem('pos_print_font_size')) || 16;
   const { orderType, selectedTable, activeOrderId, cart, originalCart, customerName, discount, discountType, editingBillId, editingBillNo } = posState
@@ -387,8 +387,8 @@ export default function POS() {
                       >
                         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: 48, fontWeight: 900, color: 'var(--text)', opacity: 0.2, lineHeight: 1 }}>{String(table.number).replace(/^T-?/i, '')}</div>
                         {hasOrder && (
-                          <div style={{ marginTop: 'auto', paddingTop: 8, width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div style={{ fontSize: 14, fontWeight: 900, color: '#c0392b' }}>
+                          <div style={{ marginTop: 'auto', paddingTop: 8, width: '100%', display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <div style={{ fontSize: 14, fontWeight: 900, color: '#c0392b', marginRight: 'auto' }}>
                               ₹{(() => {
                                 let items = hasOrder.items;
                                 if (typeof items === 'string') {
@@ -399,10 +399,23 @@ export default function POS() {
                             </div>
                             <div
                               onClick={(e) => { e.stopPropagation(); selectTable(table); setTimeout(() => setShowPay(true), 50); }}
-                              style={{ background: 'var(--primary-bg)', color: 'var(--primary)', padding: '5px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              style={{ background: 'var(--primary-bg)', color: 'var(--primary)', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                               title="Print Bill"
                             >
                               🖨️
+                            </div>
+                            <div
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                if (window.confirm(`Clear Table ${table.number} and cancel active order?`)) {
+                                  cancelOrder(hasOrder.id);
+                                  toast.success(`Table ${table.number} cleared`);
+                                }
+                              }}
+                              style={{ background: '#fce4e4', color: '#c0392b', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              title="Clear Table"
+                            >
+                              🧹
                             </div>
                           </div>
                         )}

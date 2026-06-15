@@ -443,6 +443,12 @@ export const useStore = create(
 
         for (const item of queue) {
           try {
+            if (typeof item.data === 'string') {
+              try { item.data = JSON.parse(item.data); } catch (e) {}
+            }
+            if (typeof item.data === 'string') {
+              try { item.data = JSON.parse(item.data); } catch (e) {}
+            }
             console.log(`Syncing sync-action: ${item.action} on ${item.table_name}`, item.data)
             
             switch (item.action) {
@@ -525,6 +531,9 @@ export const useStore = create(
                   cleanData.payment_method = JSON.parse(cleanData.payment_method)
                 }
                 await api.post('/bills', {
+                  id: cleanData.id,
+                  bill_no: cleanData.bill_no,
+                  created_at: cleanData.created_at,
                   order_id: cleanData.order_id,
                   payment_method: cleanData.payment_method,
                   discount: cleanData.discount

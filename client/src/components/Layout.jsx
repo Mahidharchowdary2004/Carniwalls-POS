@@ -13,11 +13,8 @@ const nav = [
   { to: '/sales-summary', icon: '📈', label: 'Sales Summary' },
   { to: '/bills',         icon: '🧾', label: 'Bills History' },
   { to: '/menu',          icon: '🍽️', label: 'Menu Builder' },
-  { to: '/live-monitor',  icon: '📡', label: 'Live Monitor' },
   { section: 'People' },
-  { to: '/staff',         icon: '👥', label: 'Staff' },
   { to: '/employee-summary', icon: '📝', label: 'Employee Summary' },
-  { to: '/customers',     icon: '🤝', label: 'Customers' },
   { section: 'System' },
   { to: '/settings',      icon: '⚙️', label: 'Settings' },
 ]
@@ -133,7 +130,7 @@ export default function Layout() {
             <div className="outlet-dot" />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                Koramangala
+                Carniwalls
               </div>
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>
                 {user?.name} · {user?.role}
