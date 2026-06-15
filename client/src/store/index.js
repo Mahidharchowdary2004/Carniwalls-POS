@@ -59,6 +59,7 @@ export const useStore = create(
       isOffline: !navigator.onLine,
       syncQueue: [],
       lastCheckedDate: null,
+      cachedUsers: [],
       
       setOfflineStatus: (status) => set({ isOffline: status }),
 
@@ -163,78 +164,133 @@ export const useStore = create(
       },
 
       login: async (identifier, password, isPhone = false) => {
+        const simpleHash = (str) => {
+          let hash = 0;
+          for (let i = 0; i < str.length; i++) {
+            hash = (hash << 5) - hash + str.charCodeAt(i);
+            hash |= 0;
+          }
+          return hash.toString();
+        };
+
+        const tryOfflineLogin = () => {
+          const matchingUser = (get().cachedUsers || []).find(u => 
+            isPhone ? u.phone === identifier : u.email === identifier
+          );
+          if (matchingUser && matchingUser.passwordHash === simpleHash(password)) {
+            localStorage.setItem('rq_token', matchingUser.token);
+            set({ user: matchingUser.user, outlet: matchingUser.user.outlet || null });
+            return { user: matchingUser.user, token: matchingUser.token };
+          } else {
+            throw new Error('Invalid offline credentials');
+          }
+        };
+
+        // Offline Login Fallback (forced offline state)
+        if (get().isOffline) {
+          return tryOfflineLogin();
+        }
+
         const payload = isPhone ? { phone: identifier, password } : { email: identifier, password }
-        const { data } = await api.post('/auth/login', payload)
-        localStorage.setItem('rq_token', data.token)
-        
-        // Extract outlet_id from JWT
-        let userObj = data.user
-        if (userObj && !userObj.outlet_id) {
-          try {
-            const tokenPayload = JSON.parse(atob(data.token.split('.')[1]));
-            userObj.outlet_id = tokenPayload.outlet_id;
-          } catch (e) {
-            console.error('Failed to extract outlet_id from token on login:', e);
-          }
-        }
-
-        // Final fallback
-        if (userObj && !userObj.outlet_id) {
-          userObj.outlet_id = 'out_main';
-        }
-        
-        // Fetch outlet details
         try {
-          if (userObj.outlet_id) {
-            const outRes = await api.get(`/outlets/${userObj.outlet_id}`)
-            userObj.outlet = outRes.data
+          const { data } = await api.post('/auth/login', payload)
+          localStorage.setItem('rq_token', data.token)
+          
+          // Extract outlet_id from JWT
+          let userObj = data.user
+          if (userObj && !userObj.outlet_id) {
+            try {
+              const tokenPayload = JSON.parse(atob(data.token.split('.')[1]));
+              userObj.outlet_id = tokenPayload.outlet_id;
+            } catch (e) {
+              console.error('Failed to extract outlet_id from token on login:', e);
+            }
           }
-        } catch (err) {
-          console.warn('Failed to fetch outlet details on login:', err)
-        }
 
-        set({ user: userObj, outlet: userObj.outlet || null })
-        if (userObj.outlet_id) socket.emit('join-outlet', userObj.outlet_id);
-        
-        // Pull latest data and populate local SQLite
-        if (userObj.outlet_id) {
+          // Final fallback
+          if (userObj && !userObj.outlet_id) {
+            userObj.outlet_id = 'out_main';
+          }
+          
+          // Fetch outlet details
           try {
-            console.log('Online login - performing initial synchronization...')
-            const [catsRes, menuRes, tablesRes, ordersRes, invRes, billsRes] = await Promise.all([
-              api.get('/categories'),
-              api.get('/menu'),
-              api.get('/tables'),
-              api.get('/orders'),
-              api.get('/inventory'),
-              api.get('/bills', { params: { limit: 500 } })
-            ])
-
-            const serverData = {
-              categories: catsRes.data,
-              menuItems: menuRes.data,
-              tables: tablesRes.data,
-              activeOrders: ordersRes.data,
-              inventory: invRes.data,
-              bills: billsRes.data
+            if (userObj.outlet_id) {
+              const outRes = await api.get(`/outlets/${userObj.outlet_id}`)
+              userObj.outlet = outRes.data
             }
-
-            if (isElectron) {
-              await dbAdapter.hydrateSQLite(serverData, userObj.outlet_id)
-            }
-
-            set({
-              categories: serverData.categories,
-              menuItems: serverData.menuItems,
-              tables: serverData.tables,
-              activeOrders: serverData.activeOrders,
-              inventory: serverData.inventory
-            })
-          } catch (syncErr) {
-            console.error('Initial database hydration failed:', syncErr)
+          } catch (err) {
+            console.warn('Failed to fetch outlet details on login:', err)
           }
-        }
 
-        return data
+          const enrichedUser = { ...userObj, outlet: userObj.outlet || null };
+          set({ user: enrichedUser, outlet: enrichedUser.outlet || null })
+          if (enrichedUser.outlet_id) socket.emit('join-outlet', enrichedUser.outlet_id);
+          
+          // Cache this user credentials locally for future offline logins
+          const newCachedUser = {
+            email: enrichedUser.email,
+            phone: enrichedUser.phone,
+            passwordHash: simpleHash(password),
+            user: enrichedUser,
+            token: data.token
+          };
+          const updatedCachedUsers = [
+            ...(get().cachedUsers || []).filter(u => u.email !== enrichedUser.email && u.phone !== enrichedUser.phone),
+            newCachedUser
+          ];
+          set({ cachedUsers: updatedCachedUsers });
+          
+          // Pull latest data and populate local SQLite
+          if (userObj.outlet_id) {
+            try {
+              console.log('Online login - performing initial synchronization...')
+              const [catsRes, menuRes, tablesRes, ordersRes, invRes, billsRes] = await Promise.all([
+                api.get('/categories'),
+                api.get('/menu'),
+                api.get('/tables'),
+                api.get('/orders'),
+                api.get('/inventory'),
+                api.get('/bills', { params: { limit: 500 } })
+              ])
+
+              const serverData = {
+                categories: catsRes.data,
+                menuItems: menuRes.data,
+                tables: tablesRes.data,
+                activeOrders: ordersRes.data,
+                inventory: invRes.data,
+                bills: billsRes.data
+              }
+
+              if (isElectron) {
+                await dbAdapter.hydrateSQLite(serverData, userObj.outlet_id)
+              }
+
+              set({
+                categories: serverData.categories,
+                menuItems: serverData.menuItems,
+                tables: serverData.tables,
+                activeOrders: serverData.activeOrders,
+                inventory: serverData.inventory
+              })
+            } catch (syncErr) {
+              console.error('Initial database hydration failed:', syncErr)
+            }
+          }
+
+          return data
+        } catch (loginErr) {
+          // If login fails due to a network connection/unreachable server, fall back to offline login
+          if (!loginErr.response) {
+            console.log('Server unreachable. Attempting offline authentication fallback...');
+            try {
+              return tryOfflineLogin();
+            } catch (offlineErr) {
+              throw offlineErr;
+            }
+          }
+          throw loginErr;
+        }
       },
       logout: () => {
         localStorage.removeItem('rq_token')
@@ -750,7 +806,8 @@ export const useStore = create(
         inventory: state.inventory,
         syncQueue: state.syncQueue,
         user: state.user,
-        lastCheckedDate: state.lastCheckedDate
+        lastCheckedDate: state.lastCheckedDate,
+        cachedUsers: state.cachedUsers
       }),
       onRehydrateStorage: () => (state) => {
         if (state && state.user && !state.user.outlet_id) {

@@ -1,6 +1,6 @@
 {
   "name": "carniwalls-pos",
-  "version": "1.0.15",
+  "version": "1.15.1",
   "description": "CarniWalls-POS Desktop Application",
   "main": "main.js",
   "scripts": {
