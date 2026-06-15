@@ -1205,12 +1205,26 @@ tr:hover td {
 .print-only { display: none; }
 
 @media print {
-  /* Hide sidebar and topbar when printing normal pages */
-  .sidebar, .topbar, .no-print {
+  /* Hide sidebar, topbar, and no-print elements completely from layout */
+  .sidebar, .topbar, .no-print, .no-print * {
     display: none !important;
   }
   .main { margin: 0 !important; width: 100% !important; }
   .content { padding: 0 !important; }
+
+  /* Reset layout height and constraints so page collapses to receipt height */
+  html, body, #root, .app, .main, .content, .pos-root {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+    position: static !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
 
   @page {
     margin: 0;
@@ -1227,12 +1241,13 @@ tr:hover td {
   }
   body:has(.print-only) .print-only {
     display: block !important;
-    position: absolute;
-    left: 0;
-    top: 0;
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
     width: 300px; /* Standard 80mm thermal width */
     margin: 0;
-    padding: 0 4px; /* Tiny padding so text doesn't touch the exact edge */
+    padding: 0 4px 15px 4px; /* Tiny padding and bottom margin to ensure clean cut */
+    box-sizing: border-box !important;
     font-family: 'MerchantCopy', monospace, sans-serif;
     color: #000;
   }
@@ -1240,7 +1255,7 @@ tr:hover td {
   body:has(.print-only) .print-only hr { border-top: 1px solid #000; margin: 8px 0; }
   body:has(.print-only) .print-only table { width: 100%; font-size: 14px; }
   body:has(.print-only) .print-only th, 
-  body:has(.print-only) .print-only td { text-align: left; padding: 2px 0; background: transparent; border: none; color: #000; }
+  body:has(.print-only) .print-only td { padding: 2px 0; background: transparent; border: none; color: #000; }
   body:has(.print-only) .print-only .qty { text-align: center; }
   body:has(.print-only) .print-only .right { text-align: right; }
 }

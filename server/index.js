@@ -627,12 +627,29 @@ app.get('/api/reports/sales', auth, async (req, res) => {
     const totalDiscount = bills.reduce((s, b) => s + parseFloat(b.discount || 0), 0);
 
     const byPayment = {};
-    bills.forEach(b => { byPayment[b.payment_method] = (byPayment[b.payment_method] || 0) + parseFloat(b.total); });
+    const byType = {};
+    bills.forEach(b => {
+      let method = 'other';
+      if (typeof b.payment_method === 'object' && b.payment_method !== null) {
+        const keys = Object.keys(b.payment_method);
+        if (keys.length > 1) {
+          method = 'split';
+        } else if (keys.length === 1) {
+          method = keys[0];
+        }
+      } else if (typeof b.payment_method === 'string') {
+        method = b.payment_method.toLowerCase();
+      }
+      byPayment[method] = (byPayment[method] || 0) + parseFloat(b.total);
+
+      const type = b.order_type || 'other';
+      byType[type] = (byType[type] || 0) + parseFloat(b.total);
+    });
 
     res.json({
       total_revenue: totalRevenue, total_orders: bills.length, total_tax: 0,
       total_discount: totalDiscount, avg_order_value: bills.length ? Math.round(totalRevenue / bills.length) : 0,
-      by_payment: byPayment, bills: bills.slice(0, 20)
+      by_payment: byPayment, by_type: byType, bills: bills.slice(0, 20)
     });
   } catch (err) { console.error('GET /api/orders error:', err); res.status(500).json({ error: err.message }); }
 });

@@ -28,7 +28,7 @@ export default function POS() {
   const [showPay, setShowPay] = useState(false)
   const [saving, setSaving] = useState(false)
   const [splitPay, setSplitPay] = useState(false)
-  const [splitAmts, setSplitAmts] = useState({ cash: 0, card: 0, upi: 0 })
+  const [splitAmts, setSplitAmts] = useState({ cash: 0, card: 0, upi: 0, not_paid: 0, due: 0, online: 0, cod: 0, other: 0 })
   const [printMode, setPrintMode] = useState('kot')
   const [lastBill, setLastBill] = useState(null)
 
@@ -72,14 +72,14 @@ export default function POS() {
   useEffect(() => {
     if (showPay) {
       setSplitPay(false)
-      setSplitAmts({ cash: total, card: 0, upi: 0 })
+      setSplitAmts({ cash: total, card: 0, upi: 0, not_paid: 0, due: 0, online: 0, cod: 0, other: 0 })
     }
   }, [showPay])
 
   // Sync splitAmts with total changes (e.g. when discount changes)
   useEffect(() => {
     if (splitPay) {
-      const other = (splitAmts.card || 0) + (splitAmts.upi || 0)
+      const other = (splitAmts.card || 0) + (splitAmts.upi || 0) + (splitAmts.not_paid || 0) + (splitAmts.due || 0) + (splitAmts.online || 0) + (splitAmts.cod || 0) + (splitAmts.other || 0)
       setSplitAmts(prev => ({ ...prev, cash: Math.max(0, total - other) }))
     }
   }, [total])
@@ -195,11 +195,16 @@ export default function POS() {
       }
       toast.success('KOT Sent to Kitchen', { icon: '👨‍🍳' })
       setPrintMode('kot')
-      setTimeout(() => {
+      setTimeout(async () => {
         if (window.ipcRenderer) {
           const printerName = localStorage.getItem('pos_printer') || ''
           const printScale = localStorage.getItem('pos_print_scale') || 100
-          window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
+          try {
+            await window.ipcRenderer.invoke('print-silent', { printerName, scaleFactor: printScale })
+          } catch (err) {
+            console.warn('print-silent invoke failed, falling back to send:', err)
+            window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
+          }
         } else {
           window.print()
         }
@@ -225,11 +230,16 @@ export default function POS() {
         setShowPay(false);
         setLastBill({ bill_no: editingBillNo });
         setPrintMode('bill')
-        setTimeout(() => {
+        setTimeout(async () => {
           if (window.ipcRenderer) {
             const printerName = localStorage.getItem('pos_printer') || ''
             const printScale = localStorage.getItem('pos_print_scale') || 100
-            window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
+            try {
+              await window.ipcRenderer.invoke('print-silent', { printerName, scaleFactor: printScale })
+            } catch (err) {
+              console.warn('print-silent invoke failed, falling back to send:', err)
+              window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
+            }
           } else {
             window.print()
           }
@@ -263,11 +273,16 @@ export default function POS() {
 
       const printFinalBill = () => {
         setPrintMode('bill')
-        setTimeout(() => {
+        setTimeout(async () => {
           if (window.ipcRenderer) {
             const printerName = localStorage.getItem('pos_printer') || ''
             const printScale = localStorage.getItem('pos_print_scale') || 100
-            window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
+            try {
+              await window.ipcRenderer.invoke('print-silent', { printerName, scaleFactor: printScale })
+            } catch (err) {
+              console.warn('print-silent invoke failed, falling back to send:', err)
+              window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
+            }
           } else {
             window.print()
           }
@@ -279,11 +294,16 @@ export default function POS() {
 
       if (needsKOT && !editingBillId) {
         setPrintMode('kot')
-        setTimeout(() => {
+        setTimeout(async () => {
           if (window.ipcRenderer) {
             const printerName = localStorage.getItem('pos_printer') || ''
             const printScale = localStorage.getItem('pos_print_scale') || 100
-            window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
+            try {
+              await window.ipcRenderer.invoke('print-silent', { printerName, scaleFactor: printScale })
+            } catch (err) {
+              console.warn('print-silent invoke failed, falling back to send:', err)
+              window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
+            }
           } else {
             window.print()
           }
@@ -305,9 +325,10 @@ export default function POS() {
   const displayBillNo = lastBill?.bill_no || displayTokenNo;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 52px)', overflow: 'hidden', background: '#f4f6f9' }}>
+    <div className="pos-root" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 52px)', overflow: 'hidden', background: '#f4f6f9' }}>
+      <div className="no-print" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
 
-      {/* ── ORDER TYPE BAR (Petpooja style) ── */}
+        {/* ── ORDER TYPE BAR (Petpooja style) ── */}
       <div className="pos-topbar">
         {editingBillId && (
           <div style={{ background: '#f39c12', color: '#fff', padding: '0 14px', display: 'flex', alignItems: 'center', fontWeight: 'bold', fontSize: 14 }}>
@@ -577,11 +598,16 @@ export default function POS() {
                     <button className="btn" onClick={() => {
                       setLastBill({ bill_no: editingBillNo });
                       setPrintMode('bill');
-                      setTimeout(() => {
+                      setTimeout(async () => {
                         if (window.ipcRenderer) {
                           const printerName = localStorage.getItem('pos_printer') || ''
                           const printScale = localStorage.getItem('pos_print_scale') || 100
-                          window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
+                          try {
+                            await window.ipcRenderer.invoke('print-silent', { printerName, scaleFactor: printScale })
+                          } catch (err) {
+                            console.warn('print-silent invoke failed, falling back to send:', err)
+                            window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
+                          }
                         } else {
                           window.print()
                         }
@@ -686,15 +712,24 @@ export default function POS() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontSize: 13, fontWeight: 700 }}>Payment Method</div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', color: splitPay ? '#c0392b' : 'var(--text3)' }}>
-                <input type="checkbox" checked={splitPay} onChange={e => { setSplitPay(e.target.checked); if (e.target.checked) setSplitAmts({ cash: total, card: 0, upi: 0 }) }} />
+                <input type="checkbox" checked={splitPay} onChange={e => { setSplitPay(e.target.checked); if (e.target.checked) setSplitAmts({ cash: total, card: 0, upi: 0, not_paid: 0, due: 0, online: 0, cod: 0, other: 0 }) }} />
                 Split Payment
               </label>
             </div>
 
             {splitPay ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20, background: '#f8f9fb', padding: 12, borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
-                {[['cash', '💵 Cash'], ['card', '💳 Card'], ['upi', '📱 UPI']].map(([m, label]) => (
-                  <div key={m} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20, background: '#f8f9fb', padding: 12, borderRadius: 'var(--radius)', border: '1px solid var(--border)', maxHeight: 200, overflowY: 'auto' }}>
+                {[
+                  ['cash', '💵 Cash'],
+                  ['card', '💳 Card'],
+                  ['upi', '📱 UPI'],
+                  ['not_paid', '❌ Not Paid'],
+                  ['due', '⏳ Due Payment'],
+                  ['online', '🌐 Online Order'],
+                  ['cod', '🛵 Online COD'],
+                  ['other', '⚙️ Other']
+                ].map(([m, label]) => (
+                  <div key={m} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 4 }}>
                     <span style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
                     <input
                       className="form-input"
@@ -704,7 +739,9 @@ export default function POS() {
                         const val = parseFloat(e.target.value) || 0;
                         const newAmts = { ...splitAmts, [m]: val };
                         if (m !== 'cash') {
-                          const other = (m === 'card' ? val + splitAmts.upi : val + splitAmts.card);
+                          const other = Object.keys(splitAmts)
+                            .filter(k => k !== 'cash' && k !== m)
+                            .reduce((sum, k) => sum + (splitAmts[k] || 0), 0) + val;
                           newAmts.cash = Math.max(0, total - other);
                         }
                         setSplitAmts(newAmts);
@@ -721,7 +758,16 @@ export default function POS() {
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 20 }}>
-                {[['cash', '💵', 'Cash'], ['card', '💳', 'Card'], ['upi', '📱', 'UPI / QR']].map(([m, icon, label]) => (
+                {[
+                  ['cash', '💵', 'Cash'],
+                  ['card', '💳', 'Card'],
+                  ['upi', '📱', 'UPI / QR'],
+                  ['not_paid', '❌', 'Not Paid'],
+                  ['due', '⏳', 'Due Payment'],
+                  ['online', '🌐', 'Online Order'],
+                  ['cod', '🛵', 'Online COD'],
+                  ['other', '⚙️', 'Other']
+                ].map(([m, icon, label]) => (
                   <button key={m} onClick={() => setPayMethod(m)} style={{
                     padding: '12px 8px', borderRadius: 'var(--radius)', fontFamily: 'inherit',
                     border: `2px solid ${payMethod === m ? '#c0392b' : 'var(--border)'}`,
@@ -742,6 +788,7 @@ export default function POS() {
           </div>
         </div>
       )}
+      </div>
 
       {/* THERMAL PRINTER RECEIPT / KOT FORMAT (Hidden on screen, visible only when printing) */}
       <div className="print-only receipt-content">
@@ -754,18 +801,18 @@ export default function POS() {
               <div>Table No: {selectedTable?.number || 'N/A'}</div>
             </div>
             <div style={{ borderTop: '2px solid #000', margin: '4px 0' }} />
-            <table style={{ width: '100%', fontSize: `${fsFontSize}px`, fontWeight: 'bold' }}>
+            <table style={{ width: '100%', fontSize: `${fsFontSize}px`, fontWeight: 'bold', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left', padding: '2px 0' }}>Item</th>
-                  <th style={{ textAlign: 'right', padding: '2px 0' }}>Qty.</th>
+                  <th style={{ width: '75%', textAlign: 'left', padding: '2px 0' }}>Item</th>
+                  <th style={{ width: '25%', textAlign: 'right', padding: '2px 0' }}>Qty.</th>
                 </tr>
               </thead>
               <tbody>
                 {cart.map((item, idx) => (
                   <tr key={idx}>
-                    <td style={{ textAlign: 'left', paddingRight: '10px', padding: '2px 0' }}>{item.name}</td>
-                    <td style={{ textAlign: 'right', padding: '2px 0' }}>{item.qty}</td>
+                    <td style={{ width: '75%', textAlign: 'left', padding: '2px 0', wordBreak: 'break-word', whiteSpace: 'normal' }}>{item.name}</td>
+                    <td style={{ width: '25%', textAlign: 'right', padding: '2px 0' }}>{item.qty}</td>
                   </tr>
                 ))}
               </tbody>
@@ -789,14 +836,14 @@ export default function POS() {
               Name: {customerName || ''}
             </div>
             <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: `${fsFontSize}px`, fontWeight: 'bold' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: `${fsFontSize}px`, fontWeight: 'bold', whiteSpace: 'nowrap' }}>
               <span>Date: {new Date().toLocaleDateString('en-GB', { year: '2-digit', month: '2-digit', day: '2-digit' })}</span>
               <span>dine in: {selectedTable?.number || ''}</span>
             </div>
             <div style={{ fontSize: `${fsFontSize}px`, fontWeight: 'bold' }}>
               {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: `${fsFontSize}px`, fontWeight: 'bold' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: `${fsFontSize}px`, fontWeight: 'bold', whiteSpace: 'nowrap' }}>
               <span>Cashier: biller</span>
               <span>Bill No.: {displayBillNo}</span>
             </div>
@@ -804,30 +851,30 @@ export default function POS() {
               Token No.: {displayTokenNo}
             </div>
             <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
-            <table style={{ width: '100%', fontSize: `${fsFontSize}px`, fontWeight: 'bold' }}>
+            <table style={{ width: '100%', fontSize: `${fsFontSize}px`, fontWeight: 'bold', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left', padding: '2px 0' }}>Item</th>
-                  <th style={{ textAlign: 'center', padding: '2px 0' }}>Qty.</th>
-                  <th style={{ textAlign: 'right', padding: '2px 0' }}>Price</th>
-                  <th style={{ textAlign: 'right', padding: '2px 0' }}>Amount</th>
+                  <th style={{ width: '45%', textAlign: 'left', padding: '2px 0' }}>Item</th>
+                  <th style={{ width: '15%', textAlign: 'center', padding: '2px 0' }}>Qty.</th>
+                  <th style={{ width: '20%', textAlign: 'right', padding: '2px 0' }}>Price</th>
+                  <th style={{ width: '20%', textAlign: 'right', padding: '2px 0' }}>Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {cart.map((item, idx) => (
                   <tr key={idx}>
-                    <td style={{ textAlign: 'left', paddingRight: '2px', padding: '2px 0' }}>{item.name}</td>
-                    <td style={{ textAlign: 'center', padding: '2px 0' }}>{item.qty}</td>
-                    <td style={{ textAlign: 'right', padding: '2px 0' }}>{Number(item.price || 0).toFixed(2)}</td>
-                    <td style={{ textAlign: 'right', padding: '2px 0' }}>{(Number(item.price || 0) * item.qty).toFixed(2)}</td>
+                    <td style={{ width: '45%', textAlign: 'left', padding: '2px 0', wordBreak: 'break-word', whiteSpace: 'normal' }}>{item.name}</td>
+                    <td style={{ width: '15%', textAlign: 'center', padding: '2px 0' }}>{item.qty}</td>
+                    <td style={{ width: '20%', textAlign: 'right', padding: '2px 0' }}>{Number(item.price || 0).toFixed(2)}</td>
+                    <td style={{ width: '20%', textAlign: 'right', padding: '2px 0' }}>{(Number(item.price || 0) * item.qty).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: `${fsFontSize}px`, fontWeight: 'bold' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: `${fsFontSize}px`, fontWeight: 'bold', whiteSpace: 'nowrap' }}>
               <span>Total Qty: {cart.reduce((sum, i) => sum + i.qty, 0)}</span>
-              <span>Sub Total &nbsp;&nbsp; {subtotal.toFixed(2)}</span>
+              <span>Sub Total {subtotal.toFixed(2)}</span>
             </div>
             <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
             <div style={{ textAlign: 'right', fontSize: `${Math.round(fsFontSize * 1.125)}px`, fontWeight: 'bold', margin: '4px 0' }}>

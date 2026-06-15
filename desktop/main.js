@@ -119,6 +119,27 @@ ipcMain.on('print-silent', (event, options = {}) => {
   }
 })
 
+ipcMain.handle('print-silent', async (event, options = {}) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (win) {
+    return new Promise((resolve) => {
+      win.webContents.print({
+        silent: true,
+        printBackground: true,
+        deviceName: options.printerName || '',
+        margins: { marginType: 'none' },
+        scaleFactor: options.scaleFactor ? parseFloat(options.scaleFactor) : 100
+      }, (success, failureReason) => {
+        event.sender.send('print-reply', { success, failureReason })
+        if (!success) console.error('Silent Print Failed:', failureReason)
+        resolve({ success, failureReason })
+      })
+    })
+  }
+  return { success: false, failureReason: 'No window found' }
+})
+
+
 ipcMain.on('check-for-updates', () => {
   autoUpdater.checkForUpdates()
 })
@@ -298,11 +319,16 @@ ipcMain.handle('sqlite-del', (event, key) => {
 });
 
 // Relational DB generic handlers
+const mapParams = (params) => {
+  const arr = Array.isArray(params) ? params : [params];
+  return arr.map(p => typeof p === 'boolean' ? (p ? 1 : 0) : p);
+};
+
 ipcMain.handle('sqlite-run', (event, sql, params = []) => {
   if (!db) return null;
   try {
     const stmt = db.prepare(sql);
-    const info = stmt.run(...(Array.isArray(params) ? params : [params]));
+    const info = stmt.run(...mapParams(params));
     return { changes: info.changes, lastInsertRowid: info.lastInsertRowid };
   } catch (err) {
     console.error('sqlite-run error:', sql, params, err);
@@ -314,7 +340,7 @@ ipcMain.handle('sqlite-all', (event, sql, params = []) => {
   if (!db) return [];
   try {
     const stmt = db.prepare(sql);
-    return stmt.all(...(Array.isArray(params) ? params : [params]));
+    return stmt.all(...mapParams(params));
   } catch (err) {
     console.error('sqlite-all error:', sql, params, err);
     throw err;
@@ -325,7 +351,7 @@ ipcMain.handle('sqlite-row', (event, sql, params = []) => {
   if (!db) return null;
   try {
     const stmt = db.prepare(sql);
-    return stmt.get(...(Array.isArray(params) ? params : [params])) || null;
+    return stmt.get(...mapParams(params)) || null;
   } catch (err) {
     console.error('sqlite-row error:', sql, params, err);
     throw err;
@@ -339,7 +365,7 @@ ipcMain.handle('sqlite-transaction', (event, queries) => {
       const results = [];
       for (const q of queries) {
         const stmt = db.prepare(q.sql);
-        const info = stmt.run(...(Array.isArray(q.params) ? q.params : [q.params]));
+        const info = stmt.run(...mapParams(q.params));
         results.push({ changes: info.changes, lastInsertRowid: info.lastInsertRowid });
       }
       return results;
