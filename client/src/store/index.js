@@ -61,7 +61,18 @@ export const useStore = create(
       lastCheckedDate: null,
       cachedUsers: [],
       
-      setOfflineStatus: (status) => set({ isOffline: status }),
+      setOfflineStatus: (status) => {
+        set({ isOffline: status });
+        if (status) {
+          socket.disconnect();
+        } else {
+          if (!socket.connected) socket.connect();
+          const { user } = get();
+          if (user && user.outlet_id) {
+            socket.emit('join-outlet', user.outlet_id);
+          }
+        }
+      },
 
       setUser: (user) => {
         let enrichedUser = user;
@@ -84,6 +95,7 @@ export const useStore = create(
 
         set({ user: enrichedUser });
         if (enrichedUser && enrichedUser.outlet_id) {
+          if (!get().isOffline && !socket.connected) socket.connect();
           socket.emit('join-outlet', enrichedUser.outlet_id);
           // Set outlet info from user if not set
           if (enrichedUser.outlet) {
@@ -94,6 +106,10 @@ export const useStore = create(
       setOutlet: (outlet) => set({ outlet }),
 
       initSocket: () => {
+        if (!get().isOffline && !socket.connected) {
+          socket.connect();
+        }
+
         const { user } = get();
         if (user && user.outlet_id) {
           socket.emit('join-outlet', user.outlet_id);

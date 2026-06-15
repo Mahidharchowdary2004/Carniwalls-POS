@@ -4,7 +4,9 @@ import { io } from 'socket.io-client'
 const isDev = import.meta.env.DEV
 const BACKEND_URL = isDev ? 'http://localhost:3001' : 'https://carniwalls-pos-server.vercel.app'
 const BASE = `${BACKEND_URL}/api`
-const socket = io(BACKEND_URL)
+const socket = io(BACKEND_URL, {
+  autoConnect: navigator.onLine
+})
 
 const api = axios.create({ baseURL: BASE })
 api.interceptors.request.use(cfg => {
