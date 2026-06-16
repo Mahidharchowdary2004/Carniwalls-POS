@@ -17,7 +17,7 @@ api.interceptors.request.use(cfg => {
 api.interceptors.response.use(r => r, err => {
   if (err.response?.status === 401) {
     localStorage.removeItem('rq_token')
-    window.location.href = '/login'
+    window.location.hash = '#/login'
   }
   return Promise.reject(err)
 })
