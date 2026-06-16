@@ -310,8 +310,11 @@ export default function Settings() {
                         BABA DAIRY MILK PRODUCTS
                       </div>
                       <div style={{ textAlign: 'center', fontSize: `${Math.round(fs * 0.9375)}px`, fontWeight: 'bold', margin: '4px 0' }}>
-                        D.No. 2-13-80, Servey No. 411-A,<br />
-                        Kovur, Nellore -524137
+                        D.NO. 2-13-80, Servey No. 411-A,<br />
+                        411-B, 2nd Ward<br />
+                        East Side of National Highway Road<br />
+                        Sri Potti Sriramulu Nellore Andhar<br />
+                        pradesh -5241437
                       </div>
                       <div style={{ borderTop: '2px dashed #000', margin: '6px 0' }} />
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: `${fs}px`, fontWeight: 'bold' }}>

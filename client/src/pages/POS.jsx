@@ -837,12 +837,11 @@ export default function POS() {
               BABA DAIRY MILK PRODUCTS
             </div>
             <div style={{ textAlign: 'center', fontSize: `${Math.round(fsFontSize * 0.9375)}px`, fontWeight: 'bold', margin: '4px 0' }}>
-              D.No. 2-13-80, Servey No. 411-A,<br />
+              D.NO. 2-13-80, Servey No. 411-A,<br />
               411-B, 2nd Ward<br />
-              East Side of National Highway Road,<br />
-              Kovur,<br />
-              Sri Potti Sriramulu Nellore, Andhra<br />
-              Pradesh -524137
+              East Side of National Highway Road<br />
+              Sri Potti Sriramulu Nellore Andhar<br />
+              pradesh -5241437
             </div>
             <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
             <div style={{ fontSize: `${fsFontSize}px`, fontWeight: 'bold', margin: '2px 0' }}>

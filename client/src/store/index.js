@@ -699,6 +699,10 @@ export const useStore = create(
             console.error('Failed to sync item:', item, err)
             // Skip item if it is a 4xx client-side bad request (invalid data / already exists / etc)
             if (err.response && err.response.status >= 400 && err.response.status < 500) {
+              if (err.response.status === 401) {
+                console.warn('Authentication failed (401). Halting sync queue to preserve data.')
+                break
+              }
               console.warn('Skipping queue item due to persistent 4xx client error.')
               if (isElectron) {
                 await dbAdapter.deleteFromSyncQueue(item.id)
