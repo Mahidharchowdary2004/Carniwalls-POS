@@ -700,11 +700,18 @@ app.get('/api/reports/daily', auth, async (req, res) => {
     let dateFilter = "AND created_at >= CURRENT_DATE - INTERVAL '30 days'";
     const params = [req.user.outlet_id];
     let pIdx = 2;
+    let dateFormat = 'YYYY-MM-DD';
 
     if (period === 'today') {
-      dateFilter = "AND created_at >= CURRENT_DATE - INTERVAL '1 day'";
+      dateFilter = "AND (created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date";
     } else if (period === 'week') {
       dateFilter = "AND created_at >= CURRENT_DATE - INTERVAL '7 days'";
+    } else if (period === 'year') {
+      dateFilter = "AND created_at >= CURRENT_DATE - INTERVAL '1 year'";
+      dateFormat = 'YYYY-MM';
+    } else if (period === 'all-time') {
+      dateFilter = "";
+      dateFormat = 'YYYY';
     } else if (period === 'custom' && from && to) {
       dateFilter = `AND created_at >= $${pIdx++} AND created_at <= $${pIdx++}`;
       params.push(from, to + ' 23:59:59');
@@ -712,7 +719,7 @@ app.get('/api/reports/daily', auth, async (req, res) => {
 
     const { rows } = await db.query(`
       SELECT 
-        TO_CHAR(created_at + INTERVAL '5.5 hours', 'YYYY-MM-DD') as date, 
+        TO_CHAR(created_at + INTERVAL '5.5 hours', '${dateFormat}') as date, 
         SUM(total) as revenue, 
         count(*) as orders,
         SUM(discount) as discount
@@ -723,6 +730,43 @@ app.get('/api/reports/daily', auth, async (req, res) => {
     `, params);
     res.json(rows);
   } catch (err) { console.error('GET /api/reports/daily error:', err); res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/reports/item-sales-daily', auth, async (req, res) => {
+  try {
+    const { period = 'month', from, to } = req.query;
+    let dateFilter = "AND created_at >= CURRENT_DATE - INTERVAL '30 days'";
+    const params = [req.user.outlet_id];
+    let pIdx = 2;
+    let dateFormat = 'YYYY-MM-DD';
+
+    if (period === 'today') {
+      dateFilter = "AND (created_at + INTERVAL '5.5 hours')::date = (NOW() + INTERVAL '5.5 hours')::date";
+    } else if (period === 'week') {
+      dateFilter = "AND created_at >= CURRENT_DATE - INTERVAL '7 days'";
+    } else if (period === 'year') {
+      dateFilter = "AND created_at >= CURRENT_DATE - INTERVAL '1 year'";
+      dateFormat = 'YYYY-MM';
+    } else if (period === 'all-time') {
+      dateFilter = "";
+      dateFormat = 'YYYY';
+    } else if (period === 'custom' && from && to) {
+      dateFilter = `AND created_at >= $${pIdx++} AND created_at <= $${pIdx++}`;
+      params.push(from, to + ' 23:59:59');
+    }
+
+    const { rows } = await db.query(`
+      SELECT 
+        TO_CHAR(created_at + INTERVAL '5.5 hours', '${dateFormat}') as date,
+        item->>'name' as item_name, 
+        SUM((item->>'qty')::numeric) as qty
+      FROM bills, jsonb_array_elements(items) as item
+      WHERE outlet_id = $1 ${dateFilter}
+      GROUP BY 1, 2
+      ORDER BY 1 DESC, 3 DESC
+    `, params);
+    res.json(rows);
+  } catch (err) { console.error('GET /api/reports/item-sales-daily error:', err); res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/reports/top-items', auth, async (req, res) => {
