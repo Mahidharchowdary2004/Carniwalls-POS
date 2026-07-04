@@ -18,6 +18,7 @@ import EmployeeSummary from './pages/EmployeeSummary'
 import BillsHistory from './pages/BillsHistory'
 import { useNetwork } from './hooks/useNetwork'
 import { WifiOff } from 'lucide-react'
+import GlobalAutoPrinter from './components/GlobalAutoPrinter'
 
 import { useStore } from './store'
 
@@ -78,6 +79,7 @@ export default function App() {
         }}
       />
       <OfflineBanner />
+      <GlobalAutoPrinter />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>

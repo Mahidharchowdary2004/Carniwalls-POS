@@ -22,6 +22,7 @@ export default function Settings() {
   const [selectedPrinter, setSelectedPrinter] = useState(localStorage.getItem('pos_printer') || '')
   const [printScale, setPrintScale] = useState(localStorage.getItem('pos_print_scale') || '100')
   const [printFontSize, setPrintFontSize] = useState(localStorage.getItem('pos_print_font_size') || '16')
+  const [autoPrint, setAutoPrint] = useState(localStorage.getItem('pos_auto_print_kot') === 'true')
 
   useEffect(() => {
     api.get('/outlets/out_main').then(r => { 
@@ -120,6 +121,13 @@ export default function Settings() {
     setPrintFontSize(val)
     localStorage.setItem('pos_print_font_size', val)
     toast.success('Print font size saved')
+  }
+
+  function handleAutoPrintChange(e) {
+    const val = e.target.checked
+    setAutoPrint(val)
+    localStorage.setItem('pos_auto_print_kot', val.toString())
+    toast.success(val ? 'Auto-print enabled' : 'Auto-print disabled')
   }
 
   return (
@@ -280,6 +288,20 @@ export default function Settings() {
                 <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 8 }}>
                   Adjust the base font size for the printed receipt. Default is 16.
                 </div>
+              </div>
+
+              <div className="form-group" style={{ marginTop: 24, flexDirection: 'row', alignItems: 'center', display: 'flex' }}>
+                <input 
+                  type="checkbox" 
+                  id="auto-print-kot"
+                  checked={autoPrint} 
+                  onChange={handleAutoPrintChange} 
+                  style={{ width: 18, height: 18, marginRight: 12 }}
+                />
+                <label htmlFor="auto-print-kot" style={{ margin: 0, fontWeight: 'bold' }}>Auto-Print Remote KOTs</label>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4, marginLeft: 30 }}>
+                When checked, any KOT sent from a phone or tablet will automatically print to the Default POS Printer without any confirmation prompt.
               </div>
             </div>
           </div>

@@ -117,6 +117,15 @@ export const useStore = create(
 
         socket.on('new-order', (order) => {
           set(s => ({ activeOrders: [...s.activeOrders, order] }));
+          if (localStorage.getItem('pos_auto_print_kot') === 'true') {
+            window.dispatchEvent(new CustomEvent('auto-print-kot', { detail: order }));
+          }
+        });
+
+        socket.on('new-bill', (bill) => {
+          if (localStorage.getItem('pos_auto_print_kot') === 'true') {
+            window.dispatchEvent(new CustomEvent('auto-print-bill', { detail: bill }));
+          }
         });
 
         socket.on('order-update', (order) => {

@@ -2,7 +2,7 @@ import axios from 'axios'
 import { io } from 'socket.io-client'
 
 const isDev = import.meta.env.DEV
-const BACKEND_URL = isDev ? 'http://localhost:3001' : 'https://carniwalls-pos-server.vercel.app'
+const BACKEND_URL = 'https://carniwalls-pos-server.vercel.app' // Always use production to sync with mobile
 const BASE = `${BACKEND_URL}/api`
 const socket = io(BACKEND_URL, {
   autoConnect: navigator.onLine

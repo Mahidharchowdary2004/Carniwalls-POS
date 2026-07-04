@@ -499,6 +499,9 @@ app.post('/api/bills', auth, async (req, res) => {
     if (order.table_id) {
       await db.query('UPDATE tables SET status = \'free\' WHERE id = $1', [order.table_id]);
     }
+    
+    emitToOutlet(req.user.outlet_id, 'new-bill', rows[0]);
+    
     res.json(rows[0]);
   } catch (err) { console.error('GET /api/orders error:', err); res.status(500).json({ error: err.message }); }
 });
@@ -1087,6 +1090,10 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
       await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS kot_printed BOOLEAN DEFAULT FALSE');
       await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS token_no INTEGER');
       await db.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS bill_no INTEGER');
+      await db.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS table_id VARCHAR(50)');
+      await db.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS order_type VARCHAR(20)');
+      await db.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS items JSONB DEFAULT \'[]\'');
+      await db.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT \'paid\'');
       await db.query('ALTER TABLE inventory ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
       await db.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
       await db.query('ALTER TABLE staff ADD COLUMN IF NOT EXISTS outlet_id VARCHAR(50)');
