@@ -42,8 +42,16 @@
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
-    }
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "68965f9a-6e80-45fe-b7f3-31c365363f78"
+      }
+    },
+    "owner": "mahidhar2004",
+    "newArchEnabled": true,
+    "jsEngine": "jsc"
   }
 }

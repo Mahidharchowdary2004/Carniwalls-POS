@@ -4,6 +4,18 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useStore } from '../store';
 import { useCallback } from 'react';
 
+const parseOrderItems = (items: unknown) => {
+  if (Array.isArray(items)) return items;
+  if (typeof items !== 'string') return [];
+
+  try {
+    const parsed = JSON.parse(items);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('Unable to parse order items:', error);
+    return [];
+  }
+};
 export default function CartScreen() {
   const router = useRouter();
   const { posState, updateCartQty, removeFromCart, createOrder, updateOrder, generateBill, clearCart, activeOrders, fetchOrders } = useStore();
@@ -20,7 +32,7 @@ export default function CartScreen() {
 
   const totalAmount = cart.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
 
-  const activeOrderItems = activeOrder ? (typeof activeOrder.items === 'string' ? JSON.parse(activeOrder.items) : (activeOrder.items || [])) : [];
+  const activeOrderItems = activeOrder ? parseOrderItems(activeOrder.items) : [];
   const displayItems = [
     ...activeOrderItems.map((item: any, idx: number) => ({ ...item, isSent: true, displayId: `sent_${idx}` })),
     ...cart.map((item: any) => ({ ...item, isSent: false, displayId: `new_${item.id}` }))
@@ -34,7 +46,7 @@ export default function CartScreen() {
     setLoading(true);
     try {
       if (activeOrder) {
-        const existingItems = typeof activeOrder.items === 'string' ? JSON.parse(activeOrder.items) : (activeOrder.items || []);
+        const existingItems = parseOrderItems(activeOrder.items);
         const newItems = cart.map((item: any) => ({
           menu_item_id: item.id,
           name: item.name,

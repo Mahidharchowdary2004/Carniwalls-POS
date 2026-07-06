@@ -1,10 +1,25 @@
-import { Stack, useRouter, useSegments } from 'expo-router';
+import 'react-native-gesture-handler';
+import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useStore } from '../store';
+
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+  return (
+    <View style={styles.errorContainer}>
+      <Text style={styles.errorTitle}>App startup failed</Text>
+      <Text style={styles.errorMessage}>{error.message}</Text>
+      <TouchableOpacity style={styles.retryButton} onPress={retry} activeOpacity={0.85}>
+        <Text style={styles.retryText}>Try again</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
+  const navigationState = useRootNavigationState();
   const [isReady, setIsReady] = useState(false);
   
   const user = useStore((state) => state.user);
@@ -22,7 +37,7 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || !navigationState?.key) return;
 
     const inAuthGroup = segments[0] === 'login';
 
@@ -36,7 +51,7 @@ export default function RootLayout() {
         router.replace('/');
       }
     }
-  }, [user, segments, isReady]);
+  }, [user, segments, isReady, navigationState?.key]);
 
   if (!isReady) return null; // Or a splash screen
 
@@ -50,3 +65,36 @@ export default function RootLayout() {
     </Stack>
   );
 }
+
+const styles = StyleSheet.create({
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#fff8e6',
+  },
+  errorTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#2a0a00',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: '#8a6a4a',
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+  retryButton: {
+    backgroundColor: '#e00000',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  retryText: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+});

@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from './api';
 
+const asArray = (value) => (Array.isArray(value) ? value : []);
+
 export const useStore = create((set, get) => ({
   user: null,
   outlet: null,
@@ -72,7 +74,7 @@ export const useStore = create((set, get) => ({
     if (!user) return;
     try {
       const { data } = await api.get('/tables');
-      set({ tables: data });
+      set({ tables: asArray(data) });
     } catch (error) {
       console.error('fetchTables error:', error);
       if (error.response?.status === 401) logout();
@@ -88,7 +90,7 @@ export const useStore = create((set, get) => ({
         api.get('/categories'),
         api.get('/menu')
       ]);
-      set({ categories: catsRes.data, menuItems: menuRes.data });
+      set({ categories: asArray(catsRes.data), menuItems: asArray(menuRes.data) });
     } catch (error) {
       console.error('fetchMenu error:', error);
       if (error.response?.status === 401) logout();
@@ -101,7 +103,7 @@ export const useStore = create((set, get) => ({
     if (!user) return;
     try {
       const { data } = await api.get('/orders');
-      set({ activeOrders: data });
+      set({ activeOrders: asArray(data) });
     } catch (error) {
       console.error('fetchOrders error:', error);
       if (error.response?.status === 401) logout();
@@ -114,7 +116,7 @@ export const useStore = create((set, get) => ({
     if (!user) return;
     try {
       const { data } = await api.get('/kots');
-      set({ kots: data });
+      set({ kots: asArray(data) });
     } catch (error) {
       console.error('fetchKots error:', error);
       if (error.response?.status === 401) logout();
