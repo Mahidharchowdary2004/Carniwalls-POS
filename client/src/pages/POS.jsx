@@ -298,25 +298,9 @@ export default function POS() {
 
         setShowPay(false);
         setLastBill({ bill_no: editingBillNo });
-        setPrintMode('bill')
-        setTimeout(async () => {
-          if (window.ipcRenderer) {
-            const printerName = localStorage.getItem('pos_printer') || ''
-            const printScale = localStorage.getItem('pos_print_scale') || 100
-            try {
-              await window.ipcRenderer.invoke('print-silent', { printerName, scaleFactor: printScale })
-            } catch (err) {
-              console.warn('print-silent invoke failed, falling back to send:', err)
-              window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
-            }
-          } else {
-            window.print()
-          }
-          setPosState({ cart: [], originalCart: [], activeOrderId: null, selectedTable: null, discount: 0, discountType: 'amt', customerName: '', editingBillId: null, editingBillNo: null })
-          setStep(orderType === 'dine-in' ? 'tables' : 'items')
-          fetchTables()
-        }, 300);
-        setSaving(false);
+        setPosState({ cart: [], originalCart: [], activeOrderId: null, selectedTable: null, discount: 0, discountType: 'amt', customerName: '', editingBillId: null, editingBillNo: null, billPrinted: false })
+        setStep(orderType === 'dine-in' ? 'tables' : 'items')
+        fetchTables()
         return;
       }
 
@@ -336,51 +320,12 @@ export default function POS() {
       const bill = await generateBill(orderId, payData, discountAmt)
       setShowPay(false);
       setLastBill(bill);
-      toast.success(`✅ Bill ₹${bill.total} — ${payMethod.toUpperCase()}`)
+      toast.success(`✅ Saved ₹${bill.total} — ${payMethod.toUpperCase()}`)
 
-      const needsKOT = !activeOrderId || !(activeOrders.find(o => o.id === activeOrderId)?.kot_printed);
+      setPosState({ cart: [], originalCart: [], activeOrderId: null, selectedTable: null, discount: 0, discountType: 'amt', customerName: '', editingBillId: null, editingBillNo: null, billPrinted: false })
+      setStep(orderType === 'dine-in' ? 'tables' : 'items')
+      fetchTables()
 
-      const printFinalBill = () => {
-        setPrintMode('bill')
-        setTimeout(async () => {
-          if (window.ipcRenderer) {
-            const printerName = localStorage.getItem('pos_printer') || ''
-            const printScale = localStorage.getItem('pos_print_scale') || 100
-            try {
-              await window.ipcRenderer.invoke('print-silent', { printerName, scaleFactor: printScale })
-            } catch (err) {
-              console.warn('print-silent invoke failed, falling back to send:', err)
-              window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
-            }
-          } else {
-            window.print()
-          }
-          setPosState({ cart: [], originalCart: [], activeOrderId: null, selectedTable: null, discount: 0, discountType: 'amt', customerName: '', editingBillId: null, editingBillNo: null })
-          setStep(orderType === 'dine-in' ? 'tables' : 'items')
-          fetchTables()
-        }, 300);
-      };
-
-      if (needsKOT && !editingBillId) {
-        setPrintMode('kot')
-        setTimeout(async () => {
-          if (window.ipcRenderer) {
-            const printerName = localStorage.getItem('pos_printer') || ''
-            const printScale = localStorage.getItem('pos_print_scale') || 100
-            try {
-              await window.ipcRenderer.invoke('print-silent', { printerName, scaleFactor: printScale })
-            } catch (err) {
-              console.warn('print-silent invoke failed, falling back to send:', err)
-              window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
-            }
-          } else {
-            window.print()
-          }
-          setTimeout(printFinalBill, 500);
-        }, 300);
-      } else {
-        printFinalBill();
-      }
     } catch (err) { toast.error('Billing failed') }
     finally { setSaving(false) }
   }
