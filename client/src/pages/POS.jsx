@@ -412,11 +412,11 @@ export default function POS() {
                                 })()}
                               </div>
                               <div
-                                onClick={(e) => { 
-                                  e.stopPropagation(); 
-                                  selectTable(table); 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  selectTable(table);
                                   setPosState({ billPrinted: true });
-                                  setTimeout(() => setShowPay(true), 150); 
+                                  setTimeout(() => setShowPay(true), 150);
                                 }}
                                 style={{ background: 'var(--primary-bg)', color: 'var(--primary)', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                 title="Settle Amount"
@@ -619,7 +619,7 @@ export default function POS() {
 
 
                 {/* Action buttons — KOT & Bill */}
-                <div style={{ display: 'grid', gridTemplateColumns: (activeOrders.find(o => o.id === activeOrderId)?.kot_printed && !cartChanged) ? '1fr 1fr' : '1fr 1fr', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: (activeOrders.find(o => o.id === activeOrderId)?.kot_printed && !cartChanged) ? '1fr' : '1fr 1fr', gap: 8 }}>
                   {editingBillId ? (
                     <button className="btn" onClick={() => {
                       setLastBill({ bill_no: editingBillNo });
@@ -644,16 +644,17 @@ export default function POS() {
                   ) : (
                     <>
                       {(activeOrders.find(o => o.id === activeOrderId)?.kot_printed && !cartChanged) ? (
-                        <>
-                          <button className="btn" onClick={printPreBill} disabled={!cart.length || saving}
-                            style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#f39c12', color: '#fff', border: 'none' }}>
-                            🖨️ Print Bill
-                          </button>
+                        billPrinted ? (
                           <button className="bill-btn" onClick={() => { if (!cart.length) { toast.error('No items'); return; } setShowPay(true) }}
                             style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                             💳 Settle
                           </button>
-                        </>
+                        ) : (
+                          <button className="btn" onClick={printPreBill} disabled={!cart.length || saving}
+                            style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#f39c12', color: '#fff', border: 'none' }}>
+                            🖨️ Print Bill
+                          </button>
+                        )
                       ) : (
                         <button className="btn" onClick={printBillAndKot} disabled={!cart.length || saving}
                           style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#f39c12', color: '#fff', border: 'none' }}>
