@@ -671,12 +671,6 @@ export default function POS() {
                   )}
                 </div>
 
-                {(cart.length > 0 || editingBillId) && (
-                  <button onClick={() => setPosState({ cart: [], originalCart: [], discount: 0, activeOrderId: null, editingBillId: null, editingBillNo: null, billPrinted: false })}
-                    style={{ width: '100%', marginTop: 6, padding: '6px', background: 'none', border: '1px solid #95a5a6', color: '#7f8c8d', borderRadius: 'var(--radius)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
-                    Close
-                  </button>
-                )}
               </div>
             </div>
           )}
