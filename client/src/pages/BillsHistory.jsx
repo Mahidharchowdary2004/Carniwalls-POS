@@ -360,7 +360,6 @@ function ViewBillModal({ bill, onClose }) {
         </div>
       </div>
     </div>
-    </div>
   )
 }
 
