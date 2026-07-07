@@ -17,13 +17,58 @@ api.interceptors.request.use(async (cfg) => {
   return cfg;
 });
 
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 api.interceptors.response.use(
   (r) => r,
   async (err) => {
-    if (err.response?.status === 401) {
-      await AsyncStorage.removeItem('rq_token');
-      // Expo Router handles redirection through state changes typically,
-      // we'll manage this by clearing user state in the zustand store later.
+    const originalRequest = err.config;
+
+    if (err.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return api(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const oldToken = await AsyncStorage.getItem('rq_token');
+        if (oldToken) {
+          const { data } = await axios.post(`${BASE}/auth/refresh`, { token: oldToken });
+          const newToken = data.token;
+          await AsyncStorage.setItem('rq_token', newToken);
+          api.defaults.headers.common.Authorization = `Bearer ${newToken}`;
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          processQueue(null, newToken);
+          return api(originalRequest);
+        }
+      } catch (refreshErr) {
+        processQueue(refreshErr, null);
+        await AsyncStorage.removeItem('rq_token');
+        await AsyncStorage.removeItem('rq_user');
+      } finally {
+        isRefreshing = false;
+      }
     }
     return Promise.reject(err);
   }

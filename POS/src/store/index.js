@@ -4,6 +4,35 @@ import { api } from './api';
 
 const asArray = (value) => (Array.isArray(value) ? value : []);
 
+const decodeJWT = (token) => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = base64.length % 4;
+    let paddedBase64 = base64;
+    if (pad) {
+      paddedBase64 += '='.repeat(4 - pad);
+    }
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+    let result = '';
+    for (let i = 0; i < paddedBase64.length; i += 4) {
+      const lookup1 = chars.indexOf(paddedBase64[i]);
+      const lookup2 = chars.indexOf(paddedBase64[i + 1]);
+      const lookup3 = chars.indexOf(paddedBase64[i + 2]);
+      const lookup4 = chars.indexOf(paddedBase64[i + 3]);
+      const op1 = (lookup1 << 2) | (lookup2 >> 4);
+      const op2 = ((lookup2 & 15) << 4) | (lookup3 >> 2);
+      const op3 = ((lookup3 & 3) << 6) | lookup4;
+      result += String.fromCharCode(op1);
+      if (lookup3 !== 64) result += String.fromCharCode(op2);
+      if (lookup4 !== 64) result += String.fromCharCode(op3);
+    }
+    return JSON.parse(result);
+  } catch (e) {
+    return null;
+  }
+};
+
 export const useStore = create((set, get) => ({
   user: null,
   outlet: null,
@@ -12,6 +41,8 @@ export const useStore = create((set, get) => ({
   menuItems: [],
   activeOrders: [],
   kots: [],
+  dashboardStats: null,
+  weeklyReports: [],
   
   posState: {
     selectedTable: null,
@@ -46,8 +77,10 @@ export const useStore = create((set, get) => ({
       let userObj = data.user;
       if (userObj && !userObj.outlet_id) {
         try {
-          const tokenPayload = JSON.parse(atob(data.token.split('.')[1]));
-          userObj.outlet_id = tokenPayload.outlet_id;
+          const tokenPayload = decodeJWT(data.token);
+          if (tokenPayload) {
+            userObj.outlet_id = tokenPayload.outlet_id;
+          }
         } catch (e) {}
       }
       if (userObj && !userObj.outlet_id) {
@@ -65,7 +98,31 @@ export const useStore = create((set, get) => ({
   logout: async () => {
     await AsyncStorage.removeItem('rq_token');
     await AsyncStorage.removeItem('rq_user');
-    set({ user: null, outlet: null });
+    set({ user: null, outlet: null, dashboardStats: null, weeklyReports: [] });
+  },
+
+  fetchDashboardStats: async () => {
+    const { user, logout } = get();
+    if (!user) return;
+    try {
+      const { data } = await api.get('/dashboard/stats');
+      set({ dashboardStats: data });
+    } catch (error) {
+      console.error('fetchDashboardStats error:', error);
+      if (error.response?.status === 401) logout();
+    }
+  },
+
+  fetchWeeklyReports: async () => {
+    const { user, logout } = get();
+    if (!user) return;
+    try {
+      const { data } = await api.get('/reports/weekly');
+      set({ weeklyReports: asArray(data) });
+    } catch (error) {
+      console.error('fetchWeeklyReports error:', error);
+      if (error.response?.status === 401) logout();
+    }
   },
 
   // Tables

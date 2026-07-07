@@ -4,6 +4,7 @@ import { useStore } from '../store';
 
 export default function LoginScreen() {
   const login = useStore((state) => state.login);
+  const [type, setType] = useState<'cashier' | 'admin'>('cashier');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -11,25 +12,25 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!identifier || !password) {
-      Alert.alert('Error', 'Please enter both identifier and password');
+      Alert.alert('Error', 'Please enter both credentials');
       return;
     }
 
     setLoading(true);
     try {
-      // Basic check if it's phone or email
-      const isPhone = /^\d+$/.test(identifier);
+      const isPhone = type === 'admin';
       
-      if (isPhone && identifier.length !== 10) {
-        Alert.alert('Error', 'Phone number must be exactly 10 digits');
-        setLoading(false);
-        return;
-      }
-      
-      if (isPhone && !/^\d{6}$/.test(password)) {
-        Alert.alert('Error', 'Security OTP must be exactly 6 digits');
-        setLoading(false);
-        return;
+      if (isPhone) {
+        if (identifier.length !== 10 || !/^\d+$/.test(identifier)) {
+          Alert.alert('Error', 'Phone number must be exactly 10 digits');
+          setLoading(false);
+          return;
+        }
+        if (!/^\d{6}$/.test(password)) {
+          Alert.alert('Error', 'Security OTP must be exactly 6 digits');
+          setLoading(false);
+          return;
+        }
       }
 
       await login(identifier, password, isPhone);
@@ -54,27 +55,56 @@ export default function LoginScreen() {
       </View>
 
       <View style={styles.form}>
-        <Text style={styles.label}>Email or phone number</Text>
+        {/* Tab Switcher */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tabButton, type === 'cashier' && styles.tabButtonActive]}
+            onPress={() => { setType('cashier'); setIdentifier(''); setPassword(''); }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.tabButtonText, type === 'cashier' && styles.tabButtonTextActive]}>
+              👩‍💻 Cashier
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, type === 'admin' && styles.tabButtonActive]}
+            onPress={() => { setType('admin'); setIdentifier(''); setPassword(''); }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.tabButtonText, type === 'admin' && styles.tabButtonTextActive]}>
+              👨‍💼 Admin
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.label}>
+          {type === 'cashier' ? 'Email Address' : 'Phone Number'}
+        </Text>
         <TextInput
           style={[styles.input, focusedField === 'identifier' && styles.inputFocused]}
           value={identifier}
           onChangeText={setIdentifier}
-          placeholder="Enter email or phone"
+          placeholder={type === 'cashier' ? 'Enter cashier email' : 'Enter 10-digit phone number'}
           placeholderTextColor="#b9a98a"
           autoCapitalize="none"
-          keyboardType="email-address"
+          keyboardType={type === 'cashier' ? 'email-address' : 'numeric'}
+          maxLength={type === 'admin' ? 10 : undefined}
           onFocus={() => setFocusedField('identifier')}
           onBlur={() => setFocusedField(null)}
         />
 
-        <Text style={styles.label}>Password</Text>
+        <Text style={styles.label}>
+          {type === 'cashier' ? 'Password' : 'Security OTP (6-digits)'}
+        </Text>
         <TextInput
           style={[styles.input, focusedField === 'password' && styles.inputFocused]}
           value={password}
           onChangeText={setPassword}
-          placeholder="Enter password"
+          placeholder={type === 'cashier' ? 'Enter password' : 'Enter 6-digit OTP'}
           placeholderTextColor="#b9a98a"
           secureTextEntry
+          keyboardType={type === 'cashier' ? 'default' : 'numeric'}
+          maxLength={type === 'admin' ? 6 : undefined}
           onFocus={() => setFocusedField('password')}
           onBlur={() => setFocusedField(null)}
         />
@@ -88,7 +118,7 @@ export default function LoginScreen() {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>Login</Text>
+            <Text style={styles.buttonText}>Login as {type === 'cashier' ? 'Cashier' : 'Admin'}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -108,6 +138,7 @@ const COLORS = {
   inkSoft: '#8a6a4a',
   border: '#ffe9b0',
   card: '#ffffff',
+  tabBg: '#f1f5f9',
 };
 
 const styles = StyleSheet.create({
@@ -172,6 +203,37 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 10,
     elevation: 3,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.tabBg,
+    padding: 4,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  tabButtonActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  tabButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  tabButtonTextActive: {
+    color: COLORS.primary,
   },
   label: {
     fontSize: 13,

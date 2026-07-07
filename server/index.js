@@ -88,6 +88,22 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+app.post('/api/auth/refresh', async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Token required' });
+  try {
+    const payload = jwt.verify(token, JWT_SECRET, { ignoreExpiration: true });
+    const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [payload.id]);
+    const user = rows[0];
+    if (!user) return res.status(401).json({ error: 'User not found' });
+
+    const newToken = jwt.sign({ id: user.id, role: user.role, outlet_id: user.outlet_id }, JWT_SECRET, { expiresIn: '24h' });
+    res.json({ token: newToken, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
 app.get('/api/dashboard/stats', auth, async (req, res) => {
   try {

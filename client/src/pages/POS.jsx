@@ -11,7 +11,7 @@ const ORDER_TYPES = [
 export default function POS() {
   const { tables, menuItems, categories, activeOrders,
     fetchTables, fetchMenu, fetchOrders,
-    createOrder, updateOrder, cancelOrder, generateBill, posState, setPosState } = useStore()
+    createOrder, updateOrder, cancelOrder, generateBill, posState, setPosState, user } = useStore()
 
   const fsFontSize = parseInt(localStorage.getItem('pos_print_font_size')) || 16;
   const { orderType, selectedTable, activeOrderId, cart, originalCart, customerName, discount, discountType, editingBillId, editingBillNo, billPrinted } = posState
@@ -41,7 +41,13 @@ export default function POS() {
     return { subtotal: s, discountAmt: dAmt, total: invalid ? base : base - dAmt, isInvalidDiscount: invalid }
   }, [cart, discount, discountType])
 
-  useEffect(() => { fetchTables(); fetchMenu(); fetchOrders() }, [])
+  useEffect(() => {
+    if (user?.outlet_id) {
+      fetchTables()
+      fetchMenu()
+      fetchOrders()
+    }
+  }, [user?.outlet_id])
 
   // When switching to takeaway/delivery, skip table selection, or if editing a bill
   useEffect(() => {
@@ -71,6 +77,7 @@ export default function POS() {
 
   // Reset split state when opening modal
   useEffect(() => {
+    console.log('showPay state changed:', showPay, 'total:', total);
     if (showPay) {
       setSplitPay(false)
       setSplitAmts({ cash: total, card: 0, upi: 0, not_paid: 0, due: 0, online: 0, cod: 0, other: 0 })
@@ -399,9 +406,9 @@ export default function POS() {
                           onClick={() => selectTable(table)}
                           style={{ padding: '12px 10px', minHeight: 110, height: 'auto', position: 'relative' }}
                         >
-                          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: 48, fontWeight: 900, color: 'var(--text)', opacity: 0.2, lineHeight: 1 }}>{String(table.number).replace(/^T-?/i, '')}</div>
+                          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: 48, fontWeight: 900, color: 'var(--text)', opacity: 0.2, lineHeight: 1, pointerEvents: 'none' }}>{String(table.number).replace(/^T-?/i, '')}</div>
                           {hasOrder && (
-                            <div style={{ marginTop: 'auto', paddingTop: 8, width: '100%', display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <div style={{ marginTop: 'auto', paddingTop: 8, width: '100%', display: 'flex', gap: 6, alignItems: 'center', position: 'relative', zIndex: 2 }}>
                               <div style={{ fontSize: 14, fontWeight: 900, color: '#c0392b', marginRight: 'auto' }}>
                                 ₹{(() => {
                                   let items = hasOrder.items;
@@ -414,9 +421,15 @@ export default function POS() {
                               <div
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  console.log('💳 Clicked settle for table:', table);
                                   selectTable(table);
+                                  console.log('Setting billPrinted: true');
                                   setPosState({ billPrinted: true });
-                                  setTimeout(() => setShowPay(true), 150);
+                                  console.log('Scheduling setShowPay(true)');
+                                  setTimeout(() => {
+                                    console.log('Running setTimeout, setting showPay to true');
+                                    setShowPay(true);
+                                  }, 150);
                                 }}
                                 style={{ background: 'var(--primary-bg)', color: 'var(--primary)', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                 title="Settle Amount"

@@ -97,11 +97,14 @@ export default function CartScreen() {
     if (!activeOrder) return;
     setLoading(true);
     try {
-      await generateBill(activeOrder.id, 'cash', 0);
-      Alert.alert('Success', 'Bill generated & Table cleared!');
+      // Instead of generateBill which settles the order and frees the table,
+      // we update the order's state to request the bill, keeping the table occupied
+      // so that it can be properly settled on the Web POS.
+      await updateOrder(activeOrder.id, { kot_printed: true });
+      Alert.alert('Success', 'Bill request sent to counter!');
       router.replace('/');
     } catch (err) {
-      Alert.alert('Error', 'Failed to generate bill.');
+      Alert.alert('Error', 'Failed to send bill request.');
       console.error(err);
     } finally {
       setLoading(false);

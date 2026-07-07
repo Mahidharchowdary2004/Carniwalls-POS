@@ -839,8 +839,25 @@ export const useStore = create(
         cachedUsers: state.cachedUsers
       }),
       onRehydrateStorage: () => (state) => {
-        if (state && state.user && !state.user.outlet_id) {
-          state.user.outlet_id = 'out_main';
+        if (state) {
+          if (state.user && !state.user.outlet_id) {
+            state.user.outlet_id = 'out_main';
+          }
+          if (!state.user) {
+            const token = localStorage.getItem('rq_token');
+            if (token) {
+              try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                state.user = {
+                  id: payload.id,
+                  role: payload.role,
+                  outlet_id: payload.outlet_id || 'out_main'
+                };
+              } catch (e) {
+                console.error('Failed to decode token on rehydration:', e);
+              }
+            }
+          }
         }
       }
     }

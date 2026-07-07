@@ -14,12 +14,61 @@ api.interceptors.request.use(cfg => {
   if (token) cfg.headers.Authorization = `Bearer ${token}`
   return cfg
 })
-api.interceptors.response.use(r => r, err => {
-  if (err.response?.status === 401) {
-    localStorage.removeItem('rq_token')
-    window.location.href = '#/login'
+let isRefreshing = false
+let failedQueue = []
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error)
+    } else {
+      prom.resolve(token)
+    }
+  })
+  failedQueue = []
+}
+
+api.interceptors.response.use(
+  r => r,
+  async err => {
+    const originalRequest = err.config
+
+    if (err.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject })
+        })
+          .then(token => {
+            originalRequest.headers.Authorization = `Bearer ${token}`
+            return api(originalRequest)
+          })
+          .catch(err => Promise.reject(err))
+      }
+
+      originalRequest._retry = true
+      isRefreshing = true
+
+      try {
+        const oldToken = localStorage.getItem('rq_token')
+        if (oldToken) {
+          const { data } = await axios.post(`${BASE}/auth/refresh`, { token: oldToken })
+          const newToken = data.token
+          localStorage.setItem('rq_token', newToken)
+          api.defaults.headers.common.Authorization = `Bearer ${newToken}`
+          originalRequest.headers.Authorization = `Bearer ${newToken}`
+          processQueue(null, newToken)
+          return api(originalRequest)
+        }
+      } catch (refreshErr) {
+        processQueue(refreshErr, null)
+        localStorage.removeItem('rq_token')
+        window.location.href = '#/login'
+      } finally {
+        isRefreshing = false
+      }
+    }
+    return Promise.reject(err)
   }
-  return Promise.reject(err)
-})
+)
 
 export { api, socket, BACKEND_URL, BASE }
