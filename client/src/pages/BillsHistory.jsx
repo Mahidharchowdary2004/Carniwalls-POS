@@ -354,7 +354,11 @@ function ViewBillModal({ bill, onClose }) {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text2)', fontSize: 13, marginTop: 4 }}>
               <span>Payment Method</span>
-              <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{bill.payment_method}</span>
+              <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>
+                {typeof bill.payment_method === 'object' && bill.payment_method !== null
+                  ? (Object.keys(bill.payment_method).filter(k => (bill.payment_method[k] || 0) > 0).join('+') || Object.keys(bill.payment_method)[0])
+                  : (bill.payment_method || 'N/A')}
+              </span>
             </div>
           </div>
         </div>
