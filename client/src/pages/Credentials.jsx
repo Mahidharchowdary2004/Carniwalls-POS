@@ -6,6 +6,7 @@ export default function Credentials() {
   const { user } = useStore()
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showAddModal, setShowAddModal] = useState(false)
 
   useEffect(() => {
     if (user?.role !== 'admin') return
@@ -26,9 +27,12 @@ export default function Credentials() {
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', paddingTop: 20 }}>
-      <div style={{ marginBottom: 24 }}>
-        <h2 style={{ margin: 0 }}>System Credentials</h2>
-        <p style={{ color: 'var(--text2)', margin: '4px 0 0 0', fontSize: 13 }}>Manage login emails, phone numbers, and passwords for the Admin and Cashier accounts.</p>
+      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h2 style={{ margin: 0 }}>System Credentials</h2>
+          <p style={{ color: 'var(--text2)', margin: '4px 0 0 0', fontSize: 13 }}>Manage login emails, phone numbers, and passwords for the Admin and Cashier accounts.</p>
+        </div>
+        <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>+ Add User</button>
       </div>
       
       {loading ? (
@@ -36,15 +40,96 @@ export default function Credentials() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {users.map(u => (
-            <CredentialForm key={u.id} initialData={u} />
+            <CredentialForm key={u.id} initialData={u} onDelete={(id) => setUsers(users.filter(x => x.id !== id))} />
           ))}
         </div>
       )}
+
+      {showAddModal && <AddUserModal onClose={() => setShowAddModal(false)} onAdded={u => setUsers([...users, u])} />}
     </div>
   )
 }
 
-function CredentialForm({ initialData }) {
+function AddUserModal({ onClose, onAdded }) {
+  const [form, setForm] = useState({ name: '', role: 'cashier', phone: '', email: '', password: '' })
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave(e) {
+    e.preventDefault()
+    if (form.role === 'admin' && !/^\d{6}$/.test(form.password)) {
+      return toast.error('Admin OTP must be exactly 6 digits')
+    }
+    setSaving(true)
+    try {
+      const { data } = await api.post('/users', form)
+      toast.success('User added successfully')
+      onAdded(data)
+      onClose()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to add user')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ width: 400 }}>
+        <div className="modal-header">
+          <div className="modal-title">Add New User</div>
+          <button className="btn btn-sm" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSave}>
+          <div className="form-group">
+            <label className="form-label">Role</label>
+            <select className="form-select" value={form.role} onChange={e => setForm(f => ({...f, role: e.target.value}))}>
+              <option value="cashier">Cashier</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Name</label>
+            <input className="form-input" required value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="e.g. John Doe" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Phone</label>
+            <input className="form-input" required type="tel" value={form.phone} onChange={e => setForm(f => ({...f, phone: e.target.value}))} placeholder="9876543210" />
+          </div>
+          {form.role !== 'admin' && (
+            <div className="form-group">
+              <label className="form-label">Email</label>
+              <input className="form-input" required type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} placeholder="user@restauraq.com" />
+            </div>
+          )}
+          <div className="form-group">
+            <label className="form-label">{form.role === 'admin' ? 'Security OTP (6 Digits)' : 'Password'}</label>
+            <input 
+              className="form-input" 
+              required 
+              type="text" 
+              value={form.password} 
+              onChange={e => {
+                if (form.role === 'admin') {
+                  const val = e.target.value.replace(/\D/g, '').slice(0, 6)
+                  setForm(f => ({...f, password: val}))
+                } else {
+                  setForm(f => ({...f, password: e.target.value}))
+                }
+              }}
+              maxLength={form.role === 'admin' ? 6 : undefined}
+              placeholder={form.role === 'admin' ? "121212" : "Password"}
+            />
+          </div>
+          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 10 }} disabled={saving}>
+            {saving ? 'Adding...' : 'Add User'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function CredentialForm({ initialData, onDelete }) {
   const [form, setForm] = useState({ ...initialData, password: '' })
   const [saving, setSaving] = useState(false)
 
@@ -121,9 +206,21 @@ function CredentialForm({ initialData }) {
             maxLength={initialData.role === 'admin' ? 6 : undefined}
           />
         </div>
-        <div className="form-group" style={{ flex: 0.8, paddingTop: 26 }}>
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', height: 40 }} disabled={saving}>
+        <div className="form-group" style={{ flex: 0.8, paddingTop: 26, display: 'flex', gap: 10 }}>
+          <button type="submit" className="btn btn-primary" style={{ flex: 1, height: 40 }} disabled={saving}>
             {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+          <button type="button" className="btn btn-danger" style={{ height: 40, width: 40, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={async () => {
+            if (!window.confirm(`Delete ${initialData.name}?`)) return
+            try {
+              await api.delete(`/users/${initialData.id}`)
+              toast.success('User deleted')
+              onDelete(initialData.id)
+            } catch (err) {
+              toast.error(err.response?.data?.error || 'Delete failed')
+            }
+          }}>
+            🗑️
           </button>
         </div>
       </form>

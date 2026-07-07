@@ -1000,6 +1000,24 @@ app.get('/api/users', auth, async (req, res) => {
   }
 });
 
+app.post('/api/users', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Only admins can add users' });
+  try {
+    const { name, email, phone, password, role } = req.body;
+    if (!name || !phone || !password || !role) {
+      return res.status(400).json({ error: 'Name, phone, password, and role are required' });
+    }
+    const hash = require('bcryptjs').hashSync(password, 10);
+    const finalEmail = email ? email : null; // Use null to avoid empty string unique constraint conflicts
+    
+    const query = `INSERT INTO users (name, email, phone, password, role, outlet_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email, phone, role`;
+    const { rows } = await db.query(query, [name, finalEmail, phone, hash, role, req.user.outlet_id]);
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.put('/api/users/:id', auth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Only admins can update users' });
   try {
@@ -1024,6 +1042,18 @@ app.put('/api/users/:id', auth, async (req, res) => {
     const { rows } = await db.query(query, values);
     if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
     res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/users/:id', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Only admins can delete users' });
+  if (req.params.id == req.user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
+  try {
+    const { rowCount } = await db.query('DELETE FROM users WHERE id = $1 AND outlet_id = $2', [req.params.id, req.user.outlet_id]);
+    if (rowCount === 0) return res.status(404).json({ error: 'User not found' });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
