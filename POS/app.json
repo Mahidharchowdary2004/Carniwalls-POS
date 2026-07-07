@@ -52,6 +52,6 @@
     },
     "owner": "mahidhar2004",
     "newArchEnabled": true,
-    "jsEngine": "jsc"
+    "jsEngine": "hermes"
   }
 }
