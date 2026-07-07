@@ -19,6 +19,19 @@ export default function LoginScreen() {
     try {
       // Basic check if it's phone or email
       const isPhone = /^\d+$/.test(identifier);
+      
+      if (isPhone && identifier.length !== 10) {
+        Alert.alert('Error', 'Phone number must be exactly 10 digits');
+        setLoading(false);
+        return;
+      }
+      
+      if (isPhone && !/^\d{6}$/.test(password)) {
+        Alert.alert('Error', 'Security OTP must be exactly 6 digits');
+        setLoading(false);
+        return;
+      }
+
       await login(identifier, password, isPhone);
     } catch (err) {
       Alert.alert('Login Failed', 'Invalid credentials or server error.');
