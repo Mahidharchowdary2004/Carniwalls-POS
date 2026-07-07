@@ -739,7 +739,7 @@ export default function POS() {
         {/* ═══════════ PAYMENT MODAL ═══════════ */}
         {showPay && (
           <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowPay(false)}>
-            <div className="modal" style={{ width: 420 }}>
+            <div className="modal" style={{ width: 420, minHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
               <div className="modal-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ width: 36, height: 36, background: '#c0392b', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🧾</div>
@@ -874,7 +874,7 @@ export default function POS() {
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ display: 'flex', gap: 10, marginTop: 'auto' }}>
                 <button className="btn" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setShowPay(false)}>Cancel</button>
                 <button className="bill-btn" style={{ flex: 2, borderRadius: 'var(--radius)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={confirmBill} disabled={saving}>
                   {saving ? <span className="spinner" style={{ width: 16, height: 16, borderTopColor: '#fff' }} /> : `Save — ₹${total.toFixed(0)}`}
