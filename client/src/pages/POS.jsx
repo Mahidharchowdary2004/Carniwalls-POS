@@ -629,52 +629,33 @@ export default function POS() {
 
 
               {/* Action buttons — KOT & Bill */}
-              <div style={{ display: 'grid', gridTemplateColumns: (activeOrders.find(o => o.id === activeOrderId)?.kot_printed && !cartChanged || editingBillId) ? '1fr 1fr' : '1fr 1fr 1fr', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: (activeOrders.find(o => o.id === activeOrderId)?.kot_printed && !cartChanged) ? '1fr' : '1fr 1fr', gap: 8 }}>
                 {editingBillId ? (
-                  cartChanged ? (
-                    <button className="bill-btn" onClick={() => { if (!cart.length) { toast.error('No items'); return; } setShowPay(true) }}
-                      style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, gridColumn: 'span 2' }}>
-                      💳 Settle & Save Edit
-                    </button>
-                  ) : (
-                    <>
-                      <button className="btn" onClick={() => {
-                        setLastBill({ bill_no: editingBillNo });
-                        setPrintMode('bill');
-                        setTimeout(async () => {
-                          if (window.ipcRenderer) {
-                            const printerName = localStorage.getItem('pos_printer') || ''
-                            const printScale = localStorage.getItem('pos_print_scale') || 100
-                            try {
-                              await window.ipcRenderer.invoke('print-silent', { printerName, scaleFactor: printScale })
-                            } catch (err) {
-                              console.warn('print-silent invoke failed, falling back to send:', err)
-                              window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
-                            }
-                          } else {
-                            window.print()
-                          }
-                        }, 100);
-                      }} style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#2980b9', color: '#fff', border: 'none' }}>
-                        🖨️ Reprint Bill
-                      </button>
-                      <button className="bill-btn" onClick={() => { if (!cart.length) { toast.error('No items'); return; } setShowPay(true) }}
-                        style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                        💳 Edit Payment
-                      </button>
-                    </>
-                  )
+                  <button className="btn" onClick={() => {
+                    setLastBill({ bill_no: editingBillNo });
+                    setPrintMode('bill');
+                    setTimeout(async () => {
+                      if (window.ipcRenderer) {
+                        const printerName = localStorage.getItem('pos_printer') || ''
+                        const printScale = localStorage.getItem('pos_print_scale') || 100
+                        try {
+                          await window.ipcRenderer.invoke('print-silent', { printerName, scaleFactor: printScale })
+                        } catch (err) {
+                          console.warn('print-silent invoke failed, falling back to send:', err)
+                          window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
+                        }
+                      } else {
+                        window.print()
+                      }
+                    }, 100);
+                  }} style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#2980b9', color: '#fff', border: 'none', gridColumn: '1 / -1' }}>
+                    🖨️ Reprint Bill
+                  </button>
                 ) : (
-                  <>
-                    <button className="btn" onClick={printPreBill} disabled={!cart.length || saving}
-                      style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#f39c12', color: '#fff', border: 'none' }}>
-                      🖨️ Print Bill
-                    </button>
-                    <button className="bill-btn" onClick={() => { if (!cart.length) { toast.error('No items'); return; } setShowPay(true) }}
-                      style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                      💳 Settle
-                    </button>
-                  </>
+                  <button className="btn" onClick={printPreBill} disabled={!cart.length || saving}
+                    style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#f39c12', color: '#fff', border: 'none' }}>
+                    🖨️ Print Bill
+                  </button>
                 )}
                 {(!(activeOrders.find(o => o.id === activeOrderId)?.kot_printed) || cartChanged) && !editingBillId && (
                   <button className="btn" onClick={printKOT} disabled={!cart.length || saving}
