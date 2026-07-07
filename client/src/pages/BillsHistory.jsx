@@ -33,13 +33,13 @@ function groupBillsByDate(bills) {
 }
 
 export default function BillsHistory() {
+  const { fetchBills, setPosState, user } = useStore()
+  const navigate = useNavigate()
   const [bills, setBills] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterType, setFilterType] = useState('today')
   const [customDates, setCustomDates] = useState({ from: '', to: '' })
-
-  const { fetchBills, setPosState } = useStore()
-  const navigate = useNavigate()
+  const [viewingBill, setViewingBill] = useState(null)
 
   const summary = React.useMemo(() => {
     const totals = { cash: 0, upi: 0, card: 0, total: 0 }
@@ -108,6 +108,11 @@ export default function BillsHistory() {
   }, [fetchBills, filterType, customDates])
 
   function handleEditBill(bill) {
+    if (user?.role !== 'admin') {
+      setViewingBill(bill)
+      return
+    }
+
     let parsedItems = bill.items || []
     if (typeof parsedItems === 'string') {
       try { parsedItems = JSON.parse(parsedItems) } catch (e) { parsedItems = [] }
@@ -279,6 +284,80 @@ export default function BillsHistory() {
           )
         })
       )}
+
+      {viewingBill && <ViewBillModal bill={viewingBill} onClose={() => setViewingBill(null)} />}
+    </div>
+  )
+}
+
+function ViewBillModal({ bill, onClose }) {
+  let items = bill.items || []
+  if (typeof items === 'string') {
+    try { items = JSON.parse(items) } catch (e) { items = [] }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ width: 450, padding: 0, overflow: 'hidden' }}>
+        <div className="modal-header" style={{ padding: '16px 24px', background: '#f8f9fb', borderBottom: '1px solid var(--border)' }}>
+          <div className="modal-title" style={{ fontSize: 18 }}>Bill Details <span style={{ color: 'var(--text3)', fontSize: 14 }}>({bill.bill_no})</span></div>
+          <button className="btn btn-sm" onClick={onClose}>✕</button>
+        </div>
+        
+        <div style={{ padding: 24 }}>
+          {bill.customer_name && (
+            <div style={{ marginBottom: 16 }}>
+              <span style={{ color: 'var(--text2)', fontSize: 13 }}>Customer:</span>
+              <strong style={{ marginLeft: 8 }}>{bill.customer_name}</strong>
+            </div>
+          )}
+
+          <div style={{ maxHeight: 300, overflowY: 'auto', marginBottom: 20 }}>
+            <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                  <th style={{ padding: '8px 0', color: 'var(--text2)' }}>Item</th>
+                  <th style={{ padding: '8px 0', textAlign: 'center', color: 'var(--text2)' }}>Qty</th>
+                  <th style={{ padding: '8px 0', textAlign: 'right', color: 'var(--text2)' }}>Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid #f0f2f5' }}>
+                    <td style={{ padding: '12px 0' }}>
+                      <div style={{ fontWeight: 600 }}>{item.name}</div>
+                      {item.variant && <div style={{ fontSize: 12, color: 'var(--text2)' }}>{item.variant.name}</div>}
+                    </td>
+                    <td style={{ padding: '12px 0', textAlign: 'center' }}>{item.quantity}</td>
+                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600 }}>₹{item.price * item.quantity}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#f8f9fb', padding: 16, borderRadius: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text2)' }}>
+              <span>Subtotal</span>
+              <span>₹{bill.subtotal}</span>
+            </div>
+            {bill.discount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--green)' }}>
+                <span>Discount</span>
+                <span>−₹{bill.discount}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 18, marginTop: 4, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+              <span>Total</span>
+              <span>₹{bill.total}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text2)', fontSize: 13, marginTop: 4 }}>
+              <span>Payment Method</span>
+              <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{bill.payment_method}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
