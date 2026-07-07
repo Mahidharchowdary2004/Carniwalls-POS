@@ -329,8 +329,8 @@ function ViewBillModal({ bill, onClose }) {
                       <div style={{ fontWeight: 600 }}>{item.name}</div>
                       {item.variant && <div style={{ fontSize: 12, color: 'var(--text2)' }}>{item.variant.name}</div>}
                     </td>
-                    <td style={{ padding: '12px 0', textAlign: 'center' }}>{item.quantity}</td>
-                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600 }}>₹{item.price * item.quantity}</td>
+                    <td style={{ padding: '12px 0', textAlign: 'center' }}>{item.qty}</td>
+                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600 }}>₹{item.price * item.qty}</td>
                   </tr>
                 ))}
               </tbody>
