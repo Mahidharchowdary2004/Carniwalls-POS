@@ -469,9 +469,9 @@ export default function POS() {
                             <div
                               onClick={(e) => { e.stopPropagation(); selectTable(table); setTimeout(() => setShowPay(true), 50); }}
                               style={{ background: 'var(--primary-bg)', color: 'var(--primary)', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                              title="Print Bill"
+                              title="Settle Amount"
                             >
-                              🖨️
+                              💳
                             </div>
                             <div
                               onClick={(e) => { 
