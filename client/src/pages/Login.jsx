@@ -42,6 +42,12 @@ export default function Login() {
       const identifier = isAdmin ? phone : email
       const finalPass = isAdmin ? otp.join('') : password
       
+      if (isAdmin && !/^\d{10}$/.test(identifier)) {
+        toast.error('Phone number must be exactly 10 digits')
+        setLoading(false)
+        return
+      }
+      
       // For demo: Admin OTP is 123456 or just matches 'admin123' if we treat it as password
       // I will send it as 'password' to the backend
       await login(identifier, finalPass, isAdmin)
@@ -123,7 +129,18 @@ export default function Login() {
               <>
                 <div className="form-group">
                   <label className="form-label">Phone Number</label>
-                  <input className="form-input" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="9876543210" required />
+                  <input 
+                    className="form-input" 
+                    type="tel" 
+                    value={phone} 
+                    onChange={e => {
+                      const val = e.target.value.replace(/\D/g, '').slice(0, 10)
+                      setPhone(val)
+                    }} 
+                    maxLength={10}
+                    placeholder="9876543210" 
+                    required 
+                  />
                 </div>
                 <div className="form-group">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>

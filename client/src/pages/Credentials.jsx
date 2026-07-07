@@ -59,6 +59,9 @@ function AddUserModal({ onClose, onAdded }) {
     if (form.role === 'admin' && !/^\d{6}$/.test(form.password)) {
       return toast.error('Admin OTP must be exactly 6 digits')
     }
+    if (!/^\d{10}$/.test(form.phone)) {
+      return toast.error('Phone number must be exactly 10 digits')
+    }
     setSaving(true)
     try {
       const { data } = await api.post('/users', form)
@@ -93,7 +96,18 @@ function AddUserModal({ onClose, onAdded }) {
           </div>
           <div className="form-group">
             <label className="form-label">Phone</label>
-            <input className="form-input" required type="tel" value={form.phone} onChange={e => setForm(f => ({...f, phone: e.target.value}))} placeholder="9876543210" />
+            <input 
+              className="form-input" 
+              required 
+              type="tel" 
+              value={form.phone} 
+              onChange={e => {
+                const val = e.target.value.replace(/\D/g, '').slice(0, 10)
+                setForm(f => ({...f, phone: val}))
+              }} 
+              maxLength={10}
+              placeholder="9876543210" 
+            />
           </div>
           {form.role !== 'admin' && (
             <div className="form-group">
@@ -139,7 +153,14 @@ function CredentialForm({ initialData, onDelete }) {
     try {
       const data = {}
       if (initialData.role !== 'admin' && form.email !== initialData.email) data.email = form.email
-      if (form.phone !== initialData.phone) data.phone = form.phone
+      if (form.phone !== initialData.phone) {
+        if (!/^\d{10}$/.test(form.phone)) {
+          toast.error('Phone number must be exactly 10 digits')
+          setSaving(false)
+          return
+        }
+        data.phone = form.phone
+      }
       if (form.password) {
         if (initialData.role === 'admin' && !/^\d{6}$/.test(form.password)) {
           toast.error('Admin OTP must be exactly 6 digits')
@@ -186,7 +207,17 @@ function CredentialForm({ initialData, onDelete }) {
         )}
         <div className="form-group" style={{ flex: 1 }}>
           <label className="form-label">Phone</label>
-          <input className="form-input" type="text" value={form.phone} onChange={e => setForm(f => ({...f, phone: e.target.value}))} required />
+          <input 
+            className="form-input" 
+            type="tel" 
+            value={form.phone} 
+            onChange={e => {
+              const val = e.target.value.replace(/\D/g, '').slice(0, 10)
+              setForm(f => ({...f, phone: val}))
+            }} 
+            maxLength={10}
+            required 
+          />
         </div>
         <div className="form-group" style={{ flex: 1 }}>
           <label className="form-label">{initialData.role === 'admin' ? 'New Security OTP (6 Digits)' : 'New Password'}</label>
