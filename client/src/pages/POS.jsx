@@ -24,12 +24,13 @@ export default function POS() {
   const [search, setSearch] = useState('')
   const [section, setSection] = useState('all')
   const [step, setStep] = useState('tables') // 'tables' | 'items'
+  const [printMode, setPrintMode] = useState('kot')
+  const [kotPrintItems, setKotPrintItems] = useState([])
   const [payMethod, setPayMethod] = useState('cash')
   const [showPay, setShowPay] = useState(false)
   const [saving, setSaving] = useState(false)
   const [splitPay, setSplitPay] = useState(false)
   const [splitAmts, setSplitAmts] = useState({ cash: 0, card: 0, upi: 0, not_paid: 0, due: 0, online: 0, cod: 0, other: 0 })
-  const [printMode, setPrintMode] = useState('kot')
   const [lastBill, setLastBill] = useState(null)
 
   const { subtotal, discountAmt, total, isInvalidDiscount } = React.useMemo(() => {
@@ -133,9 +134,9 @@ export default function POS() {
       if (typeof items === 'string') {
         try { items = JSON.parse(items) } catch (e) { items = [] }
       }
-      setPosState({ selectedTable: table, activeOrderId: existing.id, cart: items || [], discount: 0 })
+      setPosState({ selectedTable: table, activeOrderId: existing.id, cart: items || [], originalCart: items || [], discount: 0 })
     } else {
-      setPosState({ selectedTable: table, activeOrderId: null, cart: [], discount: 0 })
+      setPosState({ selectedTable: table, activeOrderId: null, cart: [], originalCart: [], discount: 0 })
     }
     setStep('items')
   }
@@ -193,6 +194,15 @@ export default function POS() {
         await updateOrder(oId, { kot_printed: true });
         await fetchOrders();
       }
+
+      const oldCartMap = {}
+      ;(originalCart || []).forEach(i => { oldCartMap[i.id] = (oldCartMap[i.id] || 0) + i.qty })
+      const diffItems = cart.map(i => ({ ...i, qty: i.qty - (oldCartMap[i.id] || 0) })).filter(i => i.qty > 0)
+      
+      const itemsToPrint = (diffItems.length === 0) ? cart : diffItems
+      setKotPrintItems(itemsToPrint)
+      setPosState({ originalCart: cart })
+
       toast.success('KOT Sent to Kitchen', { icon: '👨‍🍳' })
       setPrintMode('kot')
       setTimeout(async () => {
@@ -600,7 +610,7 @@ export default function POS() {
 
 
               {/* Action buttons — KOT & Bill */}
-              <div style={{ display: 'grid', gridTemplateColumns: (activeOrders.find(o => o.id === activeOrderId)?.kot_printed || editingBillId) ? '1fr' : '1fr 1fr', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: (activeOrders.find(o => o.id === activeOrderId)?.kot_printed && !cartChanged || editingBillId) ? '1fr' : '1fr 1fr', gap: 8 }}>
                 {editingBillId ? (
                   cartChanged ? (
                     <button className="bill-btn" onClick={() => { if (!cart.length) { toast.error('No items'); return; } setShowPay(true) }}
@@ -635,7 +645,7 @@ export default function POS() {
                     💳 Pay & Bill
                   </button>
                 )}
-                {!(activeOrders.find(o => o.id === activeOrderId)?.kot_printed) && !editingBillId && (
+                {(!(activeOrders.find(o => o.id === activeOrderId)?.kot_printed) || cartChanged) && !editingBillId && (
                   <button className="btn" onClick={printKOT} disabled={!cart.length || saving}
                     style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#2c3e50', color: '#fff', border: 'none' }}>
                     {saving ? <span className="spinner" style={{ width: 14, height: 14, borderTopColor: '#fff' }} /> : '👨‍🍳 Print KOT'}
@@ -822,7 +832,7 @@ export default function POS() {
                 </tr>
               </thead>
               <tbody>
-                {cart.map((item, idx) => (
+                {(kotPrintItems.length ? kotPrintItems : cart).map((item, idx) => (
                   <tr key={idx}>
                     <td style={{ width: '75%', textAlign: 'left', padding: '2px 0', wordBreak: 'break-word', whiteSpace: 'normal' }}>{item.name}</td>
                     <td style={{ width: '25%', textAlign: 'right', padding: '2px 0' }}>{item.qty}</td>
