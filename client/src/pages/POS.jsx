@@ -14,7 +14,7 @@ export default function POS() {
     createOrder, updateOrder, cancelOrder, generateBill, posState, setPosState } = useStore()
 
   const fsFontSize = parseInt(localStorage.getItem('pos_print_font_size')) || 16;
-  const { orderType, selectedTable, activeOrderId, cart, originalCart, customerName, discount, discountType, editingBillId, editingBillNo } = posState
+  const { orderType, selectedTable, activeOrderId, cart, originalCart, customerName, discount, discountType, editingBillId, editingBillNo, billPrinted } = posState
 
   const cartChanged = React.useMemo(() => {
     return JSON.stringify(cart) !== JSON.stringify(originalCart || [])
@@ -134,9 +134,9 @@ export default function POS() {
       if (typeof items === 'string') {
         try { items = JSON.parse(items) } catch (e) { items = [] }
       }
-      setPosState({ selectedTable: table, activeOrderId: existing.id, cart: items || [], originalCart: items || [], discount: 0 })
+      setPosState({ selectedTable: table, activeOrderId: existing.id, cart: items || [], originalCart: items || [], discount: 0, billPrinted: false })
     } else {
-      setPosState({ selectedTable: table, activeOrderId: null, cart: [], originalCart: [], discount: 0 })
+      setPosState({ selectedTable: table, activeOrderId: null, cart: [], originalCart: [], discount: 0, billPrinted: false })
     }
     setStep('items')
   }
@@ -242,10 +242,30 @@ export default function POS() {
       
       const itemsToPrint = (diffItems.length === 0) ? cart : diffItems
       setKotPrintItems(itemsToPrint)
-      setPosState({ originalCart: cart })
+      setPosState({ originalCart: cart, billPrinted: true })
     } catch (e) { console.error('KOT save failed', e) }
     finally { setSaving(false) }
 
+    setTimeout(async () => {
+      if (window.ipcRenderer) {
+        const printerName = localStorage.getItem('pos_printer') || ''
+        const printScale = localStorage.getItem('pos_print_scale') || 100
+        try {
+          await window.ipcRenderer.invoke('print-silent', { printerName, scaleFactor: printScale })
+        } catch (err) {
+          console.warn('print-silent invoke failed, falling back to send:', err)
+          window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
+        }
+      } else {
+        window.print()
+      }
+    }, 100);
+  }
+
+  async function printPreBill() {
+    if (!cart.length) return toast.error('Add items first')
+    setPrintMode('bill')
+    setPosState({ billPrinted: true })
     setTimeout(async () => {
       if (window.ipcRenderer) {
         const printerName = localStorage.getItem('pos_printer') || ''
@@ -672,10 +692,26 @@ export default function POS() {
                     🖨️ Reprint Bill
                   </button>
                 ) : (
-                  <button className="btn" onClick={printBillAndKot} disabled={!cart.length || saving}
-                    style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#f39c12', color: '#fff', border: 'none' }}>
-                    🖨️ Print Bill & KOT
-                  </button>
+                  <>
+                    {(activeOrders.find(o => o.id === activeOrderId)?.kot_printed && !cartChanged) ? (
+                      billPrinted ? (
+                        <button className="bill-btn" onClick={() => { if (!cart.length) { toast.error('No items'); return; } setShowPay(true) }}
+                          style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                          💳 Settle
+                        </button>
+                      ) : (
+                        <button className="btn" onClick={printPreBill} disabled={!cart.length || saving}
+                          style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#f39c12', color: '#fff', border: 'none' }}>
+                          🖨️ Print Bill
+                        </button>
+                      )
+                    ) : (
+                      <button className="btn" onClick={printBillAndKot} disabled={!cart.length || saving}
+                        style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#f39c12', color: '#fff', border: 'none' }}>
+                        🖨️ Print Bill & KOT
+                      </button>
+                    )}
+                  </>
                 )}
                 {(!(activeOrders.find(o => o.id === activeOrderId)?.kot_printed) || cartChanged) && !editingBillId && (
                   <button className="btn" onClick={printKOT} disabled={!cart.length || saving}
@@ -686,7 +722,7 @@ export default function POS() {
               </div>
 
               {(cart.length > 0 || editingBillId) && (
-                <button onClick={() => setPosState({ cart: [], originalCart: [], discount: 0, activeOrderId: null, editingBillId: null, editingBillNo: null })}
+                <button onClick={() => setPosState({ cart: [], originalCart: [], discount: 0, activeOrderId: null, editingBillId: null, editingBillNo: null, billPrinted: false })}
                   style={{ width: '100%', marginTop: 6, padding: '6px', background: 'none', border: '1px solid #95a5a6', color: '#7f8c8d', borderRadius: 'var(--radius)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
                   Close
                 </button>
