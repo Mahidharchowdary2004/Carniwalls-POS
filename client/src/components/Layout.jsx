@@ -17,6 +17,7 @@ const nav = [
   { to: '/employee-summary', icon: '📝', label: 'Employee Summary' },
   { section: 'System' },
   { to: '/settings',      icon: '⚙️', label: 'Settings' },
+  { to: '/credentials',   icon: '🔐', label: 'Credentials' },
 ]
 
 const pageMeta = {
@@ -31,6 +32,7 @@ const pageMeta = {
   '/employee-summary': { title: 'Employee Summary', sub: 'Daily collection & remittance report' },
   '/customers':     { title: 'Customers',           sub: 'CRM & loyalty program' },
   '/settings':      { title: 'Settings',            sub: 'Outlet, tax & integrations' },
+  '/credentials':   { title: 'System Credentials',  sub: 'Manage login accounts' },
   '/live-monitor':  { title: 'Live Monitor',        sub: 'Real-time restaurant tracking' },
 }
 
@@ -111,6 +113,7 @@ export default function Layout() {
             const badge = item.badge === 'pos' ? activeOrders.length
               : item.badge === 'online' ? pendingOnline 
               : 0
+            if (item.to === '/credentials' && user?.role !== 'admin') return null;
             return (
               <NavLink
                 key={item.to}

@@ -12,6 +12,7 @@ import MenuBuilder from './pages/MenuBuilder'
 import Staff from './pages/Staff'
 import Customers from './pages/Customers'
 import Settings from './pages/Settings'
+import Credentials from './pages/Credentials'
 import LiveMonitor from './pages/LiveMonitor'
 import SalesSummary from './pages/SalesSummary'
 import EmployeeSummary from './pages/EmployeeSummary'
@@ -96,6 +97,7 @@ export default function App() {
           <Route path="staff"         element={<Staff />} />
           <Route path="customers"     element={<Customers />} />
           <Route path="settings"      element={<Settings />} />
+          <Route path="credentials"   element={<Credentials />} />
           <Route path="live-monitor"  element={<LiveMonitor />} />
         </Route>
       </Routes>

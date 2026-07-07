@@ -113,7 +113,8 @@ export const dbAdapter = {
         available_dine: !!r.available_dine,
         available_takeaway: !!r.available_takeaway,
         available_delivery: !!r.available_delivery,
-        is_favorite: !!r.is_favorite
+        is_favorite: !!r.is_favorite,
+        stock_required: !!r.stock_required
       }))
     } else {
       const { data } = await api.get('/menu')
@@ -140,20 +141,21 @@ export const dbAdapter = {
       stock: parseFloat(item.stock) || 0,
       min_stock: parseFloat(item.min_stock) || 0,
       outlet_id: outletId,
-      is_favorite: item.is_favorite ? 1 : 0
+      is_favorite: item.is_favorite ? 1 : 0,
+      stock_required: item.stock_required ? 1 : 0
     }
 
     if (isElectron) {
       const sql = `
         INSERT OR REPLACE INTO menu_items (
           id, name, price, cost, type, description, emoji, active, gst_percent, 
-          available_dine, available_takeaway, available_delivery, category_id, stock, min_stock, outlet_id, is_favorite
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          available_dine, available_takeaway, available_delivery, category_id, stock, min_stock, outlet_id, is_favorite, stock_required
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
       await db.run(sql, [
         record.id, record.name, record.price, record.cost, record.type, record.description, record.emoji, record.active,
         record.gst_percent, record.available_dine, record.available_takeaway, record.available_delivery, record.category_id,
-        record.stock, record.min_stock, record.outlet_id, record.is_favorite
+        record.stock, record.min_stock, record.outlet_id, record.is_favorite, record.stock_required
       ])
       await dbAdapter.addToSyncQueue(item.id ? 'UPDATE_MENU_ITEM' : 'CREATE_MENU_ITEM', 'menu_items', record.id, record)
       return {
@@ -162,7 +164,8 @@ export const dbAdapter = {
         available_dine: !!record.available_dine,
         available_takeaway: !!record.available_takeaway,
         available_delivery: !!record.available_delivery,
-        is_favorite: !!record.is_favorite
+        is_favorite: !!record.is_favorite,
+        stock_required: !!record.stock_required
       }
     } else {
       const { data } = item.id 
@@ -622,13 +625,13 @@ export const dbAdapter = {
           sql: `
             INSERT OR REPLACE INTO menu_items (
               id, name, price, cost, type, description, emoji, active, gst_percent, 
-              available_dine, available_takeaway, available_delivery, category_id, stock, min_stock, outlet_id, is_favorite
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              available_dine, available_takeaway, available_delivery, category_id, stock, min_stock, outlet_id, is_favorite, stock_required
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
           params: [
             m.id, m.name, parseFloat(m.price) || 0, parseFloat(m.cost) || 0, m.type, m.description, m.emoji, m.active ? 1 : 0,
             parseFloat(m.gst_percent) || 0, m.available_dine ? 1 : 0, m.available_takeaway ? 1 : 0, m.available_delivery ? 1 : 0,
-            m.category_id, parseFloat(m.stock) || 0, parseFloat(m.min_stock) || 0, outletId, m.is_favorite ? 1 : 0
+            m.category_id, parseFloat(m.stock) || 0, parseFloat(m.min_stock) || 0, outletId, m.is_favorite ? 1 : 0, m.stock_required ? 1 : 0
           ]
         })
       }

@@ -16,7 +16,7 @@ export default function MenuBuilder() {
     name: '', category_id: '', price: '', cost: '', type: 'veg',
     description: '', emoji: '🍛', active: true,
     available_dine: true, available_takeaway: true, available_delivery: true,
-    stock: 0, min_stock: 0
+    stock: 0, min_stock: 0, stock_required: false
   })
 
   // Category modal
@@ -34,7 +34,7 @@ export default function MenuBuilder() {
 
   function openNew() {
     setEditing(null)
-    setForm({ name: '', category_id: categories[0]?.id || '', price: '', cost: '', type: 'veg', description: '', emoji: '🍛', active: true, available_dine: true, available_takeaway: true, available_delivery: true, stock: 0, min_stock: 0 })
+    setForm({ name: '', category_id: categories[0]?.id || '', price: '', cost: '', type: 'veg', description: '', emoji: '🍛', active: true, available_dine: true, available_takeaway: true, available_delivery: true, stock: 0, min_stock: 0, stock_required: false })
     setShowModal(true)
   }
   function openEdit(item) {
@@ -43,7 +43,9 @@ export default function MenuBuilder() {
     setShowModal(true)
   }
   async function handleSave() {
-    if (!form.name || !form.price) return toast.error('Name and price required')
+    if (!form.name || form.price === '') return toast.error('Name and price required')
+    if (form.stock_required && (form.stock === '' || form.stock < 0)) return toast.error('Valid stock quantity is required when stock tracking is enabled')
+    
     setSaving(true)
     try {
       await saveMenuItem(editing ? { ...form, id: editing.id } : form)
@@ -281,7 +283,7 @@ export default function MenuBuilder() {
       {/* ITEM MODAL */}
       {showModal && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowModal(false)}>
-          <div className="modal" style={{ width: 560 }}>
+          <div className="modal" style={{ width: 720 }}>
             <div className="modal-header">
               <div className="modal-title">{editing ? 'Edit Menu Item' : 'Add Menu Item'}</div>
               <button className="btn btn-sm" onClick={() => setShowModal(false)}>✕</button>
@@ -333,15 +335,24 @@ export default function MenuBuilder() {
               </div>
             </div>
             <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Current Stock</label>
-                <input className="form-input" type="number" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: parseFloat(e.target.value) || 0 }))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Min Stock (Alert)</label>
-                <input className="form-input" type="number" value={form.min_stock} onChange={e => setForm(f => ({ ...f, min_stock: parseFloat(e.target.value) || 0 }))} />
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 24, marginBottom: 16 }}>
+                <input type="checkbox" id="stock_req" checked={form.stock_required} onChange={e => setForm(f => ({ ...f, stock_required: e.target.checked }))} style={{ width: 18, height: 18, accentColor: 'var(--primary)' }} />
+                <label htmlFor="stock_req" className="form-label" style={{ marginBottom: 0, cursor: 'pointer' }}>Track Stock & Require Entry</label>
               </div>
             </div>
+            
+            {form.stock_required && (
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Current Stock *</label>
+                  <input className="form-input" type="number" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value === '' ? '' : parseFloat(e.target.value) }))} placeholder="Enter stock quantity" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Min Stock (Alert)</label>
+                  <input className="form-input" type="number" value={form.min_stock} onChange={e => setForm(f => ({ ...f, min_stock: e.target.value === '' ? '' : parseFloat(e.target.value) }))} />
+                </div>
+              </div>
+            )}
             <div className="form-row" style={{ marginBottom: 16 }}>
               <div>
                 <label className="form-label">Type</label>

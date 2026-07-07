@@ -302,7 +302,7 @@ app.put('/api/menu/:id', auth, async (req, res) => {
     if (data.stock) data.stock = parseFloat(data.stock) || 0;
     if (data.min_stock) data.min_stock = parseFloat(data.min_stock) || 0;
 
-    const allowedFields = ['name', 'price', 'cost', 'type', 'description', 'emoji', 'active', 'gst_percent', 'available_dine', 'available_takeaway', 'available_delivery', 'category_id', 'stock', 'min_stock'];
+    const allowedFields = ['name', 'price', 'cost', 'type', 'description', 'emoji', 'active', 'gst_percent', 'available_dine', 'available_takeaway', 'available_delivery', 'category_id', 'stock', 'min_stock', 'stock_required'];
     const updateData = {};
     for (const key of Object.keys(data)) {
       if (allowedFields.includes(key)) updateData[key] = data[key];
@@ -995,6 +995,45 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
 
+// --- USERS / CREDENTIALS MANAGEMENT ---
+app.get('/api/users', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, name, email, phone, role FROM users WHERE outlet_id = $1 ORDER BY id', [req.user.outlet_id]);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/users/:id', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Only admins can update users' });
+  try {
+    const { email, phone, password } = req.body;
+    const updates = [];
+    const values = [];
+    let i = 1;
+
+    if (email !== undefined) { updates.push(`email = $${i++}`); values.push(email); }
+    if (phone !== undefined) { updates.push(`phone = $${i++}`); values.push(phone); }
+    if (password && password.trim() !== '') { 
+      updates.push(`password = $${i++}`); 
+      values.push(require('bcryptjs').hashSync(password, 10)); 
+    }
+
+    if (updates.length === 0) return res.json({ success: true });
+
+    values.push(req.params.id);
+    values.push(req.user.outlet_id);
+    const query = `UPDATE users SET ${updates.join(', ')} WHERE id = $${i++} AND outlet_id = $${i++} RETURNING id, name, email, phone, role`;
+    
+    const { rows } = await db.query(query, values);
+    if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   server.listen(PORT, async () => {
     console.log(`🍽️  RestauraQ Server running on port ${PORT}`);
@@ -1107,11 +1146,11 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
       await db.query("UPDATE inventory SET outlet_id = 'out_main' WHERE outlet_id IS NULL");
 
       // Seed Admin/Cashier
-      const adminPass = bcrypt.hashSync('123456', 10);
+      const adminPass = bcrypt.hashSync('121212', 10);
       const cashierPass = bcrypt.hashSync('cash123', 10);
 
       await db.query("INSERT INTO outlets (id, name) VALUES ('out_main', 'Main Outlet') ON CONFLICT DO NOTHING");
-      await db.query("INSERT INTO users (name, email, phone, password, role, outlet_id) VALUES ('Admin', 'admin@restauraq.com', '9876543210', $1, 'admin', 'out_main') ON CONFLICT (email) DO UPDATE SET phone = EXCLUDED.phone, password = EXCLUDED.password", [adminPass]);
+      await db.query("INSERT INTO users (name, email, phone, password, role, outlet_id) VALUES ('Admin', 'admin@restauraq.com', '9440388942', $1, 'admin', 'out_main') ON CONFLICT (email) DO UPDATE SET phone = EXCLUDED.phone, password = EXCLUDED.password", [adminPass]);
       await db.query("INSERT INTO users (name, email, phone, password, role, outlet_id) VALUES ('Cashier', 'cashier@restauraq.com', '8888888888', $1, 'cashier', 'out_main') ON CONFLICT (email) DO UPDATE SET phone = EXCLUDED.phone, password = EXCLUDED.password", [cashierPass]);
 
       console.log('✅ Database schema verified and seeded.');

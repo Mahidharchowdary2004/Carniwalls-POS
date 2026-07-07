@@ -5,9 +5,9 @@ import toast from 'react-hot-toast'
 
 export default function Login() {
   const [type,     setType]     = useState('cashier') // 'cashier' | 'admin'
-  const [email,    setEmail]    = useState('cashier@restauraq.com')
-  const [phone,    setPhone]    = useState('9876543210')
-  const [password, setPassword] = useState('cash123')
+  const [email,    setEmail]    = useState('')
+  const [phone,    setPhone]    = useState('')
+  const [password, setPassword] = useState('')
   const [otp,      setOtp]      = useState(['', '', '', '', '', ''])
   const [showPass, setShowPass] = useState(false)
   const [loading,  setLoading]  = useState(false)
@@ -161,16 +161,7 @@ export default function Login() {
             </button>
           </form>
 
-          <div style={{ marginTop: 28, padding: 16, background: '#f8f9fb', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: 11, color: '#9aa3b5', marginBottom: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Demo Access</div>
-            <div style={{ fontSize: 12, color: '#5a6478', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {type === 'cashier' ? (
-                <span>Email: <b>cashier@restauraq.com</b> (Pass: cash123)</span>
-              ) : (
-                <span>Phone: <b>9876543210</b> (OTP: 123456)</span>
-              )}
-            </div>
-          </div>
+
         </div>
 
         <div style={{ textAlign: 'center', marginTop: 25, fontSize: 12, color: '#9aa3b5' }}>

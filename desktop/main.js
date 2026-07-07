@@ -204,8 +204,12 @@ try {
       stock REAL DEFAULT 0,
       min_stock REAL DEFAULT 0,
       outlet_id TEXT,
-      is_favorite INTEGER DEFAULT 0
+      is_favorite INTEGER DEFAULT 0,
+      stock_required INTEGER DEFAULT 0
     );
+    
+    -- Attempt to add columns if they don't exist (for existing DBs)
+    try { db.exec('ALTER TABLE menu_items ADD COLUMN stock_required INTEGER DEFAULT 0'); } catch(e) {}
 
     CREATE TABLE IF NOT EXISTS tables (
       id TEXT PRIMARY KEY,
