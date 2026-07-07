@@ -223,9 +223,29 @@ export default function POS() {
     finally { setSaving(false) }
   }
 
-  async function printPreBill() {
+  async function printBillAndKot() {
     if (!cart.length) return toast.error('Add items first')
-    setPrintMode('bill')
+    setPrintMode('both')
+    
+    setSaving(true)
+    try {
+      await syncOrder()
+      const oId = activeOrderId || useStore.getState().posState.activeOrderId;
+      if (oId) {
+        await updateOrder(oId, { kot_printed: true });
+        await fetchOrders();
+      }
+
+      const oldCartMap = {}
+      ;(originalCart || []).forEach(i => { oldCartMap[i.id] = (oldCartMap[i.id] || 0) + i.qty })
+      const diffItems = cart.map(i => ({ ...i, qty: i.qty - (oldCartMap[i.id] || 0) })).filter(i => i.qty > 0)
+      
+      const itemsToPrint = (diffItems.length === 0) ? cart : diffItems
+      setKotPrintItems(itemsToPrint)
+      setPosState({ originalCart: cart })
+    } catch (e) { console.error('KOT save failed', e) }
+    finally { setSaving(false) }
+
     setTimeout(async () => {
       if (window.ipcRenderer) {
         const printerName = localStorage.getItem('pos_printer') || ''
@@ -652,9 +672,9 @@ export default function POS() {
                     🖨️ Reprint Bill
                   </button>
                 ) : (
-                  <button className="btn" onClick={printPreBill} disabled={!cart.length || saving}
+                  <button className="btn" onClick={printBillAndKot} disabled={!cart.length || saving}
                     style={{ fontSize: 15, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#f39c12', color: '#fff', border: 'none' }}>
-                    🖨️ Print Bill
+                    🖨️ Print Bill & KOT
                   </button>
                 )}
                 {(!(activeOrders.find(o => o.id === activeOrderId)?.kot_printed) || cartChanged) && !editingBillId && (
@@ -827,8 +847,8 @@ export default function POS() {
 
       {/* THERMAL PRINTER RECEIPT / KOT FORMAT (Hidden on screen, visible only when printing) */}
       <div className="print-only receipt-content">
-        {printMode === 'kot' ? (
-          <>
+        {(printMode === 'kot' || printMode === 'both') && (
+          <div className="kot-print-block">
             <div style={{ textAlign: 'center', marginBottom: 4, fontSize: `${fsFontSize}px`, fontWeight: 'bold' }}>
               <div>{new Date().toLocaleDateString('en-GB', { year: '2-digit', month: '2-digit', day: '2-digit' })} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
               <div>KOT - {displayTokenNo}</div>
@@ -852,9 +872,13 @@ export default function POS() {
                 ))}
               </tbody>
             </table>
-          </>
-        ) : (
-          <>
+          </div>
+        )}
+
+        {printMode === 'both' && <div style={{ height: '40px', borderBottom: '2px dashed #000', marginBottom: '20px' }} />}
+
+        {(printMode === 'bill' || printMode === 'both') && (
+          <div className="bill-print-block">
             <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: `${fsFontSize * 1.25}px`, marginTop: '10px' }}>
               BABA DAIRY MILK PRODUCTS
             </div>
@@ -921,7 +945,7 @@ export default function POS() {
             <div style={{ textAlign: 'center', fontSize: `${fsFontSize}px`, fontWeight: 'bold', marginTop: '6px' }}>
               Thank You | Please Visit Again
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>
