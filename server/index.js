@@ -990,11 +990,6 @@ app.get('/api/outlets/:id', auth, async (req, res) => {
   } catch (err) { console.error('GET /api/orders error:', err); res.status(500).json({ error: err.message }); }
 });
 
-// ─── CATCH ALL ───────────────────────────────────────────────────────────────
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
-});
-
 // --- USERS / CREDENTIALS MANAGEMENT ---
 app.get('/api/users', auth, async (req, res) => {
   try {
@@ -1033,6 +1028,13 @@ app.put('/api/users/:id', auth, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ─── CATCH ALL ───────────────────────────────────────────────────────────────
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+});
+
+
 
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   server.listen(PORT, async () => {

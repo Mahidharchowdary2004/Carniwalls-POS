@@ -11,7 +11,7 @@ export default function Credentials() {
     if (user?.role !== 'admin') return
     api.get('/users')
       .then(r => {
-        setUsers(r.data)
+        setUsers(Array.isArray(r.data) ? r.data : [])
         setLoading(false)
       })
       .catch(err => {
