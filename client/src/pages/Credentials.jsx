@@ -53,9 +53,16 @@ function CredentialForm({ initialData }) {
     setSaving(true)
     try {
       const data = {}
-      if (form.email !== initialData.email) data.email = form.email
+      if (initialData.role !== 'admin' && form.email !== initialData.email) data.email = form.email
       if (form.phone !== initialData.phone) data.phone = form.phone
-      if (form.password) data.password = form.password
+      if (form.password) {
+        if (initialData.role === 'admin' && !/^\d{6}$/.test(form.password)) {
+          toast.error('Admin OTP must be exactly 6 digits')
+          setSaving(false)
+          return
+        }
+        data.password = form.password
+      }
       
       if (Object.keys(data).length === 0) {
         toast('No changes to save')
@@ -86,17 +93,33 @@ function CredentialForm({ initialData }) {
       </div>
       
       <form onSubmit={handleSave} className="form-row" style={{ alignItems: 'flex-start' }}>
-        <div className="form-group" style={{ flex: 1 }}>
-          <label className="form-label">Email {initialData.role === 'admin' && '(Optional)'}</label>
-          <input className="form-input" type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} required={initialData.role !== 'admin'} />
-        </div>
+        {initialData.role !== 'admin' && (
+          <div className="form-group" style={{ flex: 1 }}>
+            <label className="form-label">Email</label>
+            <input className="form-input" type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} required />
+          </div>
+        )}
         <div className="form-group" style={{ flex: 1 }}>
           <label className="form-label">Phone</label>
           <input className="form-input" type="text" value={form.phone} onChange={e => setForm(f => ({...f, phone: e.target.value}))} required />
         </div>
         <div className="form-group" style={{ flex: 1 }}>
-          <label className="form-label">New Password</label>
-          <input className="form-input" type="text" placeholder="Leave blank to keep" value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} />
+          <label className="form-label">{initialData.role === 'admin' ? 'New Security OTP (6 Digits)' : 'New Password'}</label>
+          <input 
+            className="form-input" 
+            type="text" 
+            placeholder="Leave blank to keep" 
+            value={form.password} 
+            onChange={e => {
+              if (initialData.role === 'admin') {
+                const val = e.target.value.replace(/\D/g, '').slice(0, 6)
+                setForm(f => ({...f, password: val}))
+              } else {
+                setForm(f => ({...f, password: e.target.value}))
+              }
+            }}
+            maxLength={initialData.role === 'admin' ? 6 : undefined}
+          />
         </div>
         <div className="form-group" style={{ flex: 0.8, paddingTop: 26 }}>
           <button type="submit" className="btn btn-primary" style={{ width: '100%', height: 40 }} disabled={saving}>
