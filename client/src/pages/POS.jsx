@@ -877,7 +877,7 @@ export default function POS() {
               <div style={{ display: 'flex', gap: 10 }}>
                 <button className="btn" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setShowPay(false)}>Cancel</button>
                 <button className="bill-btn" style={{ flex: 2, borderRadius: 'var(--radius)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={confirmBill} disabled={saving}>
-                  {saving ? <span className="spinner" style={{ width: 16, height: 16, borderTopColor: '#fff' }} /> : `✓ Confirm & Print — ₹${total.toFixed(0)}`}
+                  {saving ? <span className="spinner" style={{ width: 16, height: 16, borderTopColor: '#fff' }} /> : `Save — ₹${total.toFixed(0)}`}
                 </button>
               </div>
             </div>
