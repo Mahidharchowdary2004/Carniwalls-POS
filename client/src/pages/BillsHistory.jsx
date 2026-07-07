@@ -108,7 +108,8 @@ export default function BillsHistory() {
   }, [fetchBills, filterType, customDates])
 
   function handleEditBill(bill) {
-    if (user?.role !== 'admin') {
+    const isToday = toISTDateLabel(bill.created_at) === toISTDateLabel(new Date().toISOString())
+    if (user?.role !== 'admin' && !isToday) {
       setViewingBill(bill)
       return
     }
@@ -359,5 +360,32 @@ function ViewBillModal({ bill, onClose }) {
         </div>
       </div>
     </div>
+    </div>
   )
+}
+
+function toISTDateLabel(utcStr) {
+  const d = new Date(utcStr)
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' })
+}
+
+function groupBillsByDate(bills) {
+  const sorted = [...bills].sort((a, b) => (parseInt(a.bill_no) || 0) - (parseInt(b.bill_no) || 0))
+
+  const groups = {} 
+  sorted.forEach(bill => {
+    const label = toISTDateLabel(bill.created_at)
+    if (!groups[label]) groups[label] = []
+    groups[label].push(bill)
+  })
+
+  return Object.entries(groups)
+    .map(([dateLabel, bills]) => ({ dateLabel, bills }))
+    .sort((a, b) => {
+      const parseLabel = (l) => {
+        const [d, m, y] = l.split('/')
+        return new Date(y, m - 1, d)
+      }
+      return parseLabel(b.dateLabel) - parseLabel(a.dateLabel)
+    })
 }
