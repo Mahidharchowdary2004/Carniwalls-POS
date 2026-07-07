@@ -87,8 +87,8 @@ function CredentialForm({ initialData }) {
       
       <form onSubmit={handleSave} className="form-row" style={{ alignItems: 'flex-start' }}>
         <div className="form-group" style={{ flex: 1 }}>
-          <label className="form-label">Email</label>
-          <input className="form-input" type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} required />
+          <label className="form-label">Email {initialData.role === 'admin' && '(Optional)'}</label>
+          <input className="form-input" type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} required={initialData.role !== 'admin'} />
         </div>
         <div className="form-group" style={{ flex: 1 }}>
           <label className="form-label">Phone</label>
