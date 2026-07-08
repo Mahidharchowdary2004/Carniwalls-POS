@@ -232,7 +232,6 @@ export default function POS() {
 
   async function printBillAndKot() {
     if (!cart.length) return toast.error('Add items first')
-    setPrintMode('both')
 
     setSaving(true)
     try {
@@ -253,20 +252,38 @@ export default function POS() {
     } catch (e) { console.error('KOT save failed', e) }
     finally { setSaving(false) }
 
-    setTimeout(async () => {
-      if (window.ipcRenderer) {
-        const printerName = localStorage.getItem('pos_printer') || ''
-        const printScale = localStorage.getItem('pos_print_scale') || 100
-        try {
-          await window.ipcRenderer.invoke('print-silent', { printerName, scaleFactor: printScale })
-        } catch (err) {
-          console.warn('print-silent invoke failed, falling back to send:', err)
-          window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
+    const triggerPrint = () => {
+      return new Promise((resolve) => {
+        if (window.ipcRenderer) {
+          const printerName = localStorage.getItem('pos_printer') || ''
+          const printScale = localStorage.getItem('pos_print_scale') || 100
+          window.ipcRenderer.invoke('print-silent', { printerName, scaleFactor: printScale })
+            .then(resolve)
+            .catch((err) => {
+              console.warn('print-silent invoke failed, falling back to send:', err)
+              window.ipcRenderer.send('print-silent', { printerName, scaleFactor: printScale })
+              resolve()
+            })
+        } else {
+          window.print()
+          resolve()
         }
-      } else {
-        window.print()
-      }
-    }, 100);
+      })
+    }
+
+    // 1. Print KOT first
+    setPrintMode('kot')
+    setTimeout(async () => {
+      await triggerPrint()
+      
+      // 2. Wait 800ms and print Bill second
+      setTimeout(() => {
+        setPrintMode('bill')
+        setTimeout(async () => {
+          await triggerPrint()
+        }, 100)
+      }, 800)
+    }, 100)
   }
 
   async function printPreBill() {
