@@ -110,9 +110,67 @@ export const useStore = create(
           socket.connect();
         }
 
-        const { user } = get();
-        if (user && user.outlet_id) {
-          socket.emit('join-outlet', user.outlet_id);
+        // Helper to parse items string or array
+        const parseItems = (items) => {
+          if (!items) return [];
+          if (typeof items === 'string') {
+            try {
+              return JSON.parse(items);
+            } catch (e) {
+              return [];
+            }
+          }
+          return items;
+        };
+
+        // Helper to compute items diff
+        const getItemsDiff = (oldItemsRaw, newItemsRaw) => {
+          const oldItems = parseItems(oldItemsRaw);
+          const newItems = parseItems(newItemsRaw);
+          if (!oldItems.length) return newItems;
+          
+          const oldMap = {};
+          oldItems.forEach(item => {
+            const key = item.menu_item_id || item.id || item.name;
+            if (key) {
+              oldMap[key] = (oldMap[key] || 0) + (item.qty || 0);
+            }
+          });
+
+          const diff = [];
+          newItems.forEach(item => {
+            const key = item.menu_item_id || item.id || item.name;
+            const oldQty = oldMap[key] || 0;
+            const diffQty = (item.qty || 0) - oldQty;
+            if (diffQty > 0) {
+              diff.push({
+                ...item,
+                qty: diffQty
+              });
+            }
+          });
+          return diff;
+        };
+
+        // Clean up existing listeners to avoid duplicate triggers
+        socket.off('connect');
+        socket.off('new-order');
+        socket.off('new-bill');
+        socket.off('order-update');
+        socket.off('table-update');
+        socket.off('midnight-reset');
+
+        const joinRoom = () => {
+          const { user } = get();
+          if (user && user.outlet_id) {
+            socket.emit('join-outlet', user.outlet_id);
+            console.log('🔌 Socket joined outlet room:', user.outlet_id);
+          }
+        };
+
+        socket.on('connect', joinRoom);
+        if (socket.connected) {
+          joinRoom();
         }
 
         socket.on('new-order', (order) => {
@@ -129,7 +187,20 @@ export const useStore = create(
         });
 
         socket.on('order-update', (order) => {
+          const oldOrder = get().activeOrders.find(o => o.id === order.id);
           set(s => ({ activeOrders: s.activeOrders.map(o => o.id === order.id ? order : o) }));
+
+          if (localStorage.getItem('pos_auto_print_kot') === 'true') {
+            const oldItems = oldOrder ? oldOrder.items : [];
+            const diffItems = getItemsDiff(oldItems, order.items);
+            if (diffItems.length > 0) {
+              const orderToPrint = {
+                ...order,
+                items: diffItems
+              };
+              window.dispatchEvent(new CustomEvent('auto-print-kot', { detail: orderToPrint }));
+            }
+          }
         });
 
         socket.on('table-update', (table) => {
