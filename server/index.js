@@ -514,6 +514,7 @@ app.post('/api/bills', auth, async (req, res) => {
     await db.query('UPDATE orders SET status = \'billed\' WHERE id = $1', [order_id]);
     if (order.table_id) {
       await db.query('UPDATE tables SET status = \'free\' WHERE id = $1', [order.table_id]);
+      emitToOutlet(req.user.outlet_id, 'table-update', { id: order.table_id, status: 'free' });
     }
     
     emitToOutlet(req.user.outlet_id, 'new-bill', rows[0]);
