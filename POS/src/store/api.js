@@ -2,7 +2,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // const BACKEND_URL = 'http://192.168.0.4:3001'; // Local Dev Server
-const BACKEND_URL = 'https://carniwalls-pos-server.vercel.app'; // Production Server
+const BACKEND_URL = 'https://carniwalls-pos.onrender.com'; // Production Server
 const BASE = `${BACKEND_URL}/api`;
 
 const api = axios.create({ baseURL: BASE });
