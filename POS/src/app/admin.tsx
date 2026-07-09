@@ -79,7 +79,7 @@ export default function AdminDashboard() {
 
   // Channel split calculations
   const channelSplit = dashboardStats?.channel_split || { 'dine-in': 0, takeaway: 0, delivery: 0 };
-  const totalChannels = Object.values(channelSplit).reduce((a: any, b: any) => a + b, 0) || 1;
+  const totalChannels = (Object.values(channelSplit).reduce((a: any, b: any) => a + b, 0) as number) || 1;
   const channelData = [
     { label: 'Dine-in', value: channelSplit['dine-in'] || 0, color: COLORS.chartColors[0] },
     { label: 'Takeaway', value: channelSplit.takeaway || 0, color: COLORS.chartColors[1] },

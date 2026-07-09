@@ -174,21 +174,84 @@ export const useStore = create(
         }
 
         socket.on('new-order', (order) => {
+          const { user } = get();
           set(s => ({ activeOrders: [...s.activeOrders, order] }));
+          
+          if (window.ipcRenderer && user?.outlet_id) {
+            window.ipcRenderer.invoke('sqlite-run', `
+              INSERT OR REPLACE INTO orders (
+                id, table_id, items, order_type, customer_name, subtotal, cgst, sgst, discount, total, status, kot_status, kot_printed, notes, outlet_id, token_no, created_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              order.id, order.table_id, typeof order.items === 'string' ? order.items : JSON.stringify(order.items), order.order_type, order.customer_name, parseFloat(order.subtotal) || 0,
+              parseFloat(order.cgst) || 0, parseFloat(order.sgst) || 0, parseFloat(order.discount) || 0, parseFloat(order.total) || 0,
+              order.status, order.kot_status, order.kot_printed ? 1 : 0, order.notes, user.outlet_id, order.token_no, order.created_at
+            ]).catch(err => console.error("Error writing new order to SQLite:", err));
+
+            if (order.table_id) {
+              window.ipcRenderer.invoke('sqlite-run', `UPDATE tables SET status = 'occupied' WHERE id = ?`, [order.table_id])
+                .then(() => get().fetchTables())
+                .catch(err => console.error("Error updating table status on new order:", err));
+            }
+          }
+
           if (localStorage.getItem('pos_auto_print_kot') === 'true') {
             window.dispatchEvent(new CustomEvent('auto-print-kot', { detail: order }));
           }
         });
 
         socket.on('new-bill', (bill) => {
+          const { user } = get();
+          
+          if (window.ipcRenderer && user?.outlet_id) {
+            window.ipcRenderer.invoke('sqlite-run', `
+              INSERT OR REPLACE INTO bills (
+                id, order_id, table_id, order_type, items, subtotal, cgst, sgst, discount, total, payment_method, status, outlet_id, bill_no, created_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              bill.id, bill.order_id, bill.table_id, bill.order_type, typeof bill.items === 'string' ? bill.items : JSON.stringify(bill.items), parseFloat(bill.subtotal) || 0,
+              parseFloat(bill.cgst) || 0, parseFloat(bill.sgst) || 0, parseFloat(bill.discount) || 0, parseFloat(bill.total) || 0,
+              typeof bill.payment_method === 'string' ? bill.payment_method : JSON.stringify(bill.payment_method), bill.status, user.outlet_id, bill.bill_no, bill.created_at
+            ]).catch(err => console.error("Error writing new bill to SQLite:", err));
+
+            window.ipcRenderer.invoke('sqlite-run', `UPDATE orders SET status = 'billed' WHERE id = ?`, [bill.order_id])
+              .catch(err => console.error("Error marking order as billed in SQLite:", err));
+
+            if (bill.table_id) {
+              window.ipcRenderer.invoke('sqlite-run', `UPDATE tables SET status = 'free' WHERE id = ?`, [bill.table_id])
+                .then(() => get().fetchTables())
+                .catch(err => console.error("Error freeing table in SQLite:", err));
+            }
+          }
+
           if (localStorage.getItem('pos_auto_print_kot') === 'true') {
             window.dispatchEvent(new CustomEvent('auto-print-bill', { detail: bill }));
           }
         });
 
         socket.on('order-update', (order) => {
+          const { user } = get();
           const oldOrder = get().activeOrders.find(o => o.id === order.id);
           set(s => ({ activeOrders: s.activeOrders.map(o => o.id === order.id ? order : o) }));
+
+          if (window.ipcRenderer && user?.outlet_id) {
+            window.ipcRenderer.invoke('sqlite-run', `
+              INSERT OR REPLACE INTO orders (
+                id, table_id, items, order_type, customer_name, subtotal, cgst, sgst, discount, total, status, kot_status, kot_printed, notes, outlet_id, token_no, created_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              order.id, order.table_id, typeof order.items === 'string' ? order.items : JSON.stringify(order.items), order.order_type, order.customer_name, parseFloat(order.subtotal) || 0,
+              parseFloat(order.cgst) || 0, parseFloat(order.sgst) || 0, parseFloat(order.discount) || 0, parseFloat(order.total) || 0,
+              order.status, order.kot_status, order.kot_printed ? 1 : 0, order.notes, user.outlet_id, order.token_no, order.created_at
+            ]).catch(err => console.error("Error writing updated order to SQLite:", err));
+
+            if (order.table_id) {
+              const status = order.status === 'open' ? 'occupied' : 'free';
+              window.ipcRenderer.invoke('sqlite-run', `UPDATE tables SET status = ? WHERE id = ?`, [status, order.table_id])
+                .then(() => get().fetchTables())
+                .catch(err => console.error("Error updating table status on order update:", err));
+            }
+          }
 
           if (localStorage.getItem('pos_auto_print_kot') === 'true') {
             const oldItems = oldOrder ? oldOrder.items : [];
@@ -204,7 +267,13 @@ export const useStore = create(
         });
 
         socket.on('table-update', (table) => {
+          const { user } = get();
           set(s => ({ tables: s.tables.map(t => t.id === table.id ? { ...t, ...table } : t) }));
+
+          if (window.ipcRenderer && user?.outlet_id) {
+            window.ipcRenderer.invoke('sqlite-run', `UPDATE tables SET status = ? WHERE id = ?`, [table.status, table.id])
+              .catch(err => console.error("Error writing table update to SQLite:", err));
+          }
         });
 
         socket.on('midnight-reset', () => {
