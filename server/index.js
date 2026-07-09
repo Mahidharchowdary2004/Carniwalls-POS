@@ -1082,7 +1082,7 @@ app.get('*', (req, res) => {
 
 
 
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+if (process.env.RENDER || (process.env.NODE_ENV !== 'production' && !process.env.VERCEL)) {
   server.listen(PORT, async () => {
     console.log(`🍽️  RestauraQ Server running on port ${PORT}`);
 
