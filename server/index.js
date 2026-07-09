@@ -43,6 +43,58 @@ const emitToOutlet = (outletId, event, data) => {
   io.to(`outlet_${outletId}`).emit(event, data);
 };
 
+// On-demand midnight reset helper for serverless/Vercel environments
+const checkAndResetMidnight = async (outletId) => {
+  try {
+    // 1. Find if there are any open orders from previous days for this outlet
+    const { rows: oldOrders } = await db.query(`
+      SELECT id, table_id 
+      FROM orders 
+      WHERE status = 'open' 
+        AND outlet_id = $1
+        AND (created_at AT TIME ZONE 'Asia/Kolkata')::date < (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+    `, [outletId]);
+
+    if (oldOrders.length > 0) {
+      console.log(`⏰ Found ${oldOrders.length} open orders from previous days for outlet ${outletId}. Automatically resetting...`);
+      
+      const oldOrderIds = oldOrders.map(o => o.id);
+      
+      // Cancel these orders
+      await db.query(`
+        UPDATE orders 
+        SET status = 'cancelled' 
+        WHERE id = ANY($1)
+      `, [oldOrderIds]);
+
+      // Free all tables for this outlet that do not have active orders created TODAY
+      await db.query(`
+        UPDATE tables 
+        SET status = 'free' 
+        WHERE outlet_id = $1 
+          AND id NOT IN (
+            SELECT table_id 
+            FROM orders 
+            WHERE status = 'open' 
+              AND outlet_id = $1
+              AND table_id IS NOT NULL
+          )
+      `, [outletId]);
+
+      // Broadcast changes to all clients in the outlet room
+      oldOrders.forEach(o => {
+        emitToOutlet(outletId, 'order-update', { id: o.id, status: 'cancelled' });
+        if (o.table_id) {
+          emitToOutlet(outletId, 'table-update', { id: o.table_id, status: 'free' });
+        }
+      });
+      console.log(`✅ On-demand midnight reset complete for outlet ${outletId}.`);
+    }
+  } catch (err) {
+    console.error('❌ Failed to run on-demand midnight reset:', err);
+  }
+};
+
 // In-memory database removed. Using PostgreSQL instead.
 
 // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
@@ -196,9 +248,10 @@ app.get('/api/dashboard/recent-orders', auth, async (req, res) => {
 // ─── TABLES ───────────────────────────────────────────────────────────────────
 app.get('/api/tables', auth, async (req, res) => {
   try {
+    await checkAndResetMidnight(req.user.outlet_id);
     const { rows } = await db.query('SELECT * FROM tables WHERE outlet_id = $1 ORDER BY number', [req.user.outlet_id]);
     res.json(rows);
-  } catch (err) { console.error('GET /api/orders error:', err); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('GET /api/tables error:', err); res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/tables/:id', auth, async (req, res) => {
@@ -364,6 +417,7 @@ app.delete('/api/categories', auth, async (req, res) => {
 // ─── ORDERS (POS) ────────────────────────────────────────────────────────────
 app.get('/api/orders', auth, async (req, res) => {
   try {
+    await checkAndResetMidnight(req.user.outlet_id);
     const { rows } = await db.query('SELECT * FROM orders WHERE status = \'open\' AND outlet_id = $1', [req.user.outlet_id]);
     res.json(rows);
   } catch (err) { console.error('GET /api/orders error:', err); res.status(500).json({ error: err.message }); }
